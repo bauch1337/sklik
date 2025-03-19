@@ -7,10 +7,9 @@
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    /* Několik základních úprav pro vzhled */
     body { padding-top: 20px; }
     .time-interval { margin-bottom: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
-    h5 { margin-bottom: 10px; }
+    .category-header { cursor: pointer; }
   </style>
 </head>
 <body>
@@ -25,31 +24,42 @@
     </div>
     <div class="mb-3">
       <label for="dayOfWeek" class="form-label">Den v týdnu</label>
-      <select class="form-select" id="dayOfWeek" required>
-        <option value="">Vyberte den</option>
-        <option value="Pondělí">Pondělí</option>
-        <option value="Úterý">Úterý</option>
-        <option value="Středa">Středa</option>
-        <option value="Čtvrtek">Čtvrtek</option>
-        <option value="Pátek">Pátek</option>
-        <option value="Sobota">Sobota</option>
-        <option value="Neděle">Neděle</option>
-      </select>
+      <input type="text" class="form-control" id="dayOfWeek" readonly>
     </div>
     <div class="mb-3">
       <label for="dailyBudget" class="form-label">Denní rozpočet (Kč)</label>
       <input type="number" class="form-control" id="dailyBudget" value="333" required>
     </div>
     
-    <!-- Sekce pro tři kategorie -->
-    <h3>Celkově</h3>
-    <div id="overallData"></div>
+    <!-- Kategorie Celkově -->
+    <div class="mb-3">
+      <h3 class="category-header" data-bs-toggle="collapse" data-bs-target="#overallCollapse">
+        Celkově (kliknutím skrýt/ukázat)
+      </h3>
+      <div id="overallCollapse" class="collapse show">
+        <div id="overallData"></div>
+      </div>
+    </div>
     
-    <h3>Umístění (CPC Max)</h3>
-    <div id="placementData"></div>
+    <!-- Kategorie Umístění -->
+    <div class="mb-3">
+      <h3 class="category-header" data-bs-toggle="collapse" data-bs-target="#placementCollapse">
+        Umístění (CPC Max) (kliknutím skrýt/ukázat)
+      </h3>
+      <div id="placementCollapse" class="collapse show">
+        <div id="placementData"></div>
+      </div>
+    </div>
     
-    <h3>Téma (CPC Max)</h3>
-    <div id="topicData"></div>
+    <!-- Kategorie Téma -->
+    <div class="mb-3">
+      <h3 class="category-header" data-bs-toggle="collapse" data-bs-target="#topicCollapse">
+        Téma (CPC Max) (kliknutím skrýt/ukázat)
+      </h3>
+      <div id="topicCollapse" class="collapse show">
+        <div id="topicData"></div>
+      </div>
+    </div>
     
     <button type="submit" class="btn btn-primary">Uložit data</button>
   </form>
@@ -80,15 +90,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-// Po načtení stránky
-document.addEventListener('DOMContentLoaded', function() {
-
-  // Vygenerujeme časové intervaly od 6:00 do 24:00
-  const generateTimeIntervalsHTML = (prefix) => {
-    let html = '';
-    for(let hour = 6; hour < 24; hour++) {
-      let nextHour = hour + 1;
-      html += `
+// Funkce pro generování časových intervalů od 6:00 do 24:00
+const generateTimeIntervalsHTML = (prefix) => {
+  let html = '';
+  for(let hour = 6; hour < 24; hour++) {
+    let nextHour = hour + 1;
+    html += `
       <div class="time-interval">
         <h5>${hour}:00 - ${nextHour}:00</h5>
         <div class="row">
@@ -118,136 +125,204 @@ document.addEventListener('DOMContentLoaded', function() {
           <label class="form-check-label" for="${prefix}_active_${hour}">Aktivní interval</label>
         </div>
       </div>
-      `;
+    `;
+  }
+  return html;
+};
+
+// Vyplníme sekce pro jednotlivé kategorie
+document.getElementById('overallData').innerHTML = generateTimeIntervalsHTML('overall');
+document.getElementById('placementData').innerHTML = generateTimeIntervalsHTML('placement');
+document.getElementById('topicData').innerHTML = generateTimeIntervalsHTML('topic');
+
+// Funkce pro získání českého dne v týdnu na základě data
+const getCzechDayOfWeek = (dateStr) => {
+  let date = new Date(dateStr);
+  const days = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
+  return days[date.getDay()];
+};
+
+// Při změně data nastavíme den v týdnu a případně načteme již uložená data
+document.getElementById('entryDate').addEventListener('change', function() {
+  let dateVal = this.value;
+  if(dateVal) {
+    document.getElementById('dayOfWeek').value = getCzechDayOfWeek(dateVal);
+    loadDataForDate(dateVal);
+  }
+});
+
+// Funkce pro načtení dat z LocalStorage pro zvolené datum
+const loadDataForDate = (dateVal) => {
+  let storedData = localStorage.getItem('sklikData');
+  let dataArr = storedData ? JSON.parse(storedData) : [];
+  let record = dataArr.find(item => item.entryDate === dateVal);
+  if(record) {
+    document.getElementById('dailyBudget').value = record.dailyBudget;
+    // Načtení dat pro každou kategorii
+    const loadCategoryData = (prefix, catData) => {
+      for(let hour = 6; hour < 24; hour++) {
+        if(catData[hour]){
+          document.getElementById(`${prefix}_clicks_${hour}`).value = catData[hour].totalClicks;
+          document.getElementById(`${prefix}_impressions_${hour}`).value = catData[hour].totalImpressions;
+          document.getElementById(`${prefix}_interval_clicks_${hour}`).value = catData[hour].intervalClicks;
+          document.getElementById(`${prefix}_interval_impressions_${hour}`).value = catData[hour].intervalImpressions;
+          document.getElementById(`${prefix}_percentage_${hour}`).value = catData[hour].percentage;
+          document.getElementById(`${prefix}_active_${hour}`).checked = catData[hour].active;
+        }
+      }
+    };
+    loadCategoryData('overall', record.categories.overall);
+    loadCategoryData('placement', record.categories.placement);
+    loadCategoryData('topic', record.categories.topic);
+  } else {
+    // Pokud neexistuje záznam, reset formuláře (ale ponechat datum a den v týdnu)
+    // Resetovat pouze kategorická pole
+    const resetCategoryData = (prefix) => {
+      for(let hour = 6; hour < 24; hour++) {
+        document.getElementById(`${prefix}_clicks_${hour}`).value = 0;
+        document.getElementById(`${prefix}_impressions_${hour}`).value = 0;
+        document.getElementById(`${prefix}_interval_clicks_${hour}`).value = 0;
+        document.getElementById(`${prefix}_interval_impressions_${hour}`).value = 0;
+        document.getElementById(`${prefix}_percentage_${hour}`).value = 100;
+        document.getElementById(`${prefix}_active_${hour}`).checked = true;
+      }
+    };
+    resetCategoryData('overall');
+    resetCategoryData('placement');
+    resetCategoryData('topic');
+  }
+};
+
+// Zpracování formuláře – uložení dat do LocalStorage (při existenci záznamu se aktualizuje)
+document.getElementById('dailyDataForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  
+  let entryDate = document.getElementById('entryDate').value;
+  let dayOfWeek = document.getElementById('dayOfWeek').value;
+  let dailyBudget = document.getElementById('dailyBudget').value;
+  if (!entryDate || !dailyBudget) {
+    alert('Vyplňte prosím všechny povinné údaje.');
+    return;
+  }
+  
+  let dayData = {
+    entryDate,
+    dayOfWeek,
+    dailyBudget,
+    categories: {
+      overall: {},
+      placement: {},
+      topic: {}
     }
-    return html;
   };
 
-  // Naplníme sekce pro celkové statistiky, umístění a téma
-  document.getElementById('overallData').innerHTML = generateTimeIntervalsHTML('overall');
-  document.getElementById('placementData').innerHTML = generateTimeIntervalsHTML('placement');
-  document.getElementById('topicData').innerHTML = generateTimeIntervalsHTML('topic');
-
-  // Zpracování formuláře – uložení dat do LocalStorage
-  document.getElementById('dailyDataForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    // Získání a validace základních údajů
-    let entryDate = document.getElementById('entryDate').value;
-    let dayOfWeek = document.getElementById('dayOfWeek').value;
-    let dailyBudget = document.getElementById('dailyBudget').value;
-    if (!entryDate || !dayOfWeek || !dailyBudget) {
-      alert('Vyplňte prosím všechny povinné údaje.');
-      return;
+  const getCategoryData = (prefix) => {
+    let catData = {};
+    for(let hour = 6; hour < 24; hour++) {
+      catData[hour] = {
+        totalClicks: parseInt(document.getElementById(`${prefix}_clicks_${hour}`).value) || 0,
+        totalImpressions: parseInt(document.getElementById(`${prefix}_impressions_${hour}`).value) || 0,
+        intervalClicks: parseInt(document.getElementById(`${prefix}_interval_clicks_${hour}`).value) || 0,
+        intervalImpressions: parseInt(document.getElementById(`${prefix}_interval_impressions_${hour}`).value) || 0,
+        percentage: parseFloat(document.getElementById(`${prefix}_percentage_${hour}`).value) || 100,
+        active: document.getElementById(`${prefix}_active_${hour}`).checked
+      };
     }
-    
-    // Objekt pro denní data
-    let dayData = {
-      entryDate,
-      dayOfWeek,
-      dailyBudget,
-      categories: {
-        overall: {},
-        placement: {},
-        topic: {}
-      }
-    };
+    return catData;
+  };
 
-    // Funkce pro načtení dat z jednotlivých kategorií
-    const getCategoryData = (prefix) => {
-      let catData = {};
-      for(let hour = 6; hour < 24; hour++) {
-        catData[hour] = {
-          totalClicks: parseInt(document.getElementById(`${prefix}_clicks_${hour}`).value) || 0,
-          totalImpressions: parseInt(document.getElementById(`${prefix}_impressions_${hour}`).value) || 0,
-          intervalClicks: parseInt(document.getElementById(`${prefix}_interval_clicks_${hour}`).value) || 0,
-          intervalImpressions: parseInt(document.getElementById(`${prefix}_interval_impressions_${hour}`).value) || 0,
-          percentage: parseFloat(document.getElementById(`${prefix}_percentage_${hour}`).value) || 100,
-          active: document.getElementById(`${prefix}_active_${hour}`).checked
-        };
-      }
-      return catData;
-    };
+  dayData.categories.overall = getCategoryData('overall');
+  dayData.categories.placement = getCategoryData('placement');
+  dayData.categories.topic = getCategoryData('topic');
 
-    dayData.categories.overall = getCategoryData('overall');
-    dayData.categories.placement = getCategoryData('placement');
-    dayData.categories.topic = getCategoryData('topic');
-
-    // Uložení dat do LocalStorage – jednoduše jako pole záznamů
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
+  // Získání uložených dat a aktualizace či přidání nového záznamu
+  let storedData = localStorage.getItem('sklikData');
+  let dataArr = storedData ? JSON.parse(storedData) : [];
+  let existingIndex = dataArr.findIndex(item => item.entryDate === entryDate);
+  if(existingIndex > -1){
+    dataArr[existingIndex] = dayData;
+  } else {
     dataArr.push(dayData);
-    localStorage.setItem('sklikData', JSON.stringify(dataArr));
-    
-    alert('Data byla uložena.');
-    this.reset();
-  });
+  }
+  localStorage.setItem('sklikData', JSON.stringify(dataArr));
+  
+  alert('Data byla uložena.');
+});
 
-  // Generování reportu na základě zvoleného období
-  document.getElementById('generateReport').addEventListener('click', function() {
-    let fromDate = document.getElementById('reportFromDate').value;
-    let toDate = document.getElementById('reportToDate').value;
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    
-    let filteredData = dataArr.filter(item => {
-      let d = new Date(item.entryDate);
-      if(fromDate && new Date(fromDate) > d) return false;
-      if(toDate && new Date(toDate) < d) return false;
-      return true;
-    });
-    
-    let reportHTML = '<table class="table table-bordered"><thead><tr><th>Datum</th><th>Den</th><th>Rozpočet (Kč)</th></tr></thead><tbody>';
-    filteredData.forEach(day => {
-      reportHTML += `<tr>
+// Report – filtr podle období, seřazeno podle data
+document.getElementById('generateReport').addEventListener('click', function() {
+  let fromDate = document.getElementById('reportFromDate').value;
+  let toDate = document.getElementById('reportToDate').value;
+  let storedData = localStorage.getItem('sklikData');
+  let dataArr = storedData ? JSON.parse(storedData) : [];
+  
+  let filteredData = dataArr.filter(item => {
+    let d = new Date(item.entryDate);
+    if(fromDate && new Date(fromDate) > d) return false;
+    if(toDate && new Date(toDate) < d) return false;
+    return true;
+  });
+  // Seřadíme podle data
+  filteredData.sort((a, b) => new Date(a.entryDate) - new Date(b.entryDate));
+  
+  let reportHTML = '<table class="table table-bordered"><thead><tr><th>Datum</th><th>Den</th><th>Rozpočet (Kč)</th></tr></thead><tbody>';
+  filteredData.forEach(day => {
+    reportHTML += `<tr>
                       <td>${day.entryDate}</td>
                       <td>${day.dayOfWeek}</td>
                       <td>${day.dailyBudget}</td>
                     </tr>`;
-    });
-    reportHTML += '</tbody></table>';
-    document.getElementById('reportResult').innerHTML = reportHTML;
   });
+  reportHTML += '</tbody></table>';
+  document.getElementById('reportResult').innerHTML = reportHTML;
+});
 
-  // Export dat do CSV
-  document.getElementById('exportCSV').addEventListener('click', function() {
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    if(dataArr.length === 0) {
-      alert('Žádná data k exportu.');
-      return;
-    }
-    let csvContent = "data:text/csv;charset=utf-8,Datum,Den,Rozpočet (Kč)\n";
-    dataArr.forEach(day => {
-      csvContent += `${day.entryDate},${day.dayOfWeek},${day.dailyBudget}\n`;
-    });
-    let encodedUri = encodeURI(csvContent);
-    let link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "sklik_report.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+// Export dat do CSV s podporou diakritiky (přidáme BOM)
+document.getElementById('exportCSV').addEventListener('click', function() {
+  let storedData = localStorage.getItem('sklikData');
+  let dataArr = storedData ? JSON.parse(storedData) : [];
+  if(dataArr.length === 0) {
+    alert('Žádná data k exportu.');
+    return;
+  }
+  let csvContent = "\uFEFFDatum,Den,Rozpočet (Kč)\n";
+  dataArr.forEach(day => {
+    csvContent += `${day.entryDate},${day.dayOfWeek},${day.dailyBudget}\n`;
   });
+  let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
+  let link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", "sklik_report.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+});
 
-  // Export dat do PDF pomocí jsPDF
-  document.getElementById('exportPDF').addEventListener('click', function() {
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    if(dataArr.length === 0) {
-      alert('Žádná data k exportu.');
-      return;
+// Export dat do PDF s využitím jsPDF
+document.getElementById('exportPDF').addEventListener('click', function() {
+  let storedData = localStorage.getItem('sklikData');
+  let dataArr = storedData ? JSON.parse(storedData) : [];
+  if(dataArr.length === 0) {
+    alert('Žádná data k exportu.');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  let doc = new jsPDF();
+  doc.setFont("Helvetica", "normal");
+  doc.text("Sklik Report", 10, 10);
+  let rowY = 20;
+  // Seřadíme data podle data
+  dataArr.sort((a, b) => new Date(a.entryDate) - new Date(b.entryDate));
+  dataArr.forEach(day => {
+    let textLine = `${day.entryDate} | ${day.dayOfWeek} | Rozpočet: ${day.dailyBudget}`;
+    doc.text(textLine, 10, rowY);
+    rowY += 10;
+    if(rowY > 280) { // jednoduché zalomení stránky
+      doc.addPage();
+      rowY = 20;
     }
-    const { jsPDF } = window.jspdf;
-    let doc = new jsPDF();
-    doc.text("Sklik Report", 10, 10);
-    let rowY = 20;
-    dataArr.forEach(day => {
-      doc.text(`${day.entryDate} | ${day.dayOfWeek} | Rozpočet: ${day.dailyBudget}`, 10, rowY);
-      rowY += 10;
-    });
-    doc.save("sklik_report.pdf");
   });
+  doc.save("sklik_report.pdf");
 });
 </script>
 </body>
