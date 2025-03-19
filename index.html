@@ -6,6 +6,9 @@
   <title>Sklik Metrika – Zadávání dat a reporty</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Firebase CDN (compat verze pro jednoduchou integraci) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
   <style>
     body { padding-top: 20px; }
     .time-interval {
@@ -17,6 +20,21 @@
     .category-header { cursor: pointer; }
     h5, h6 { margin-top: 15px; }
   </style>
+  <script>
+    // Firebase konfigurace – použijte váš konfigurační objekt z Firebase Console
+    const firebaseConfig = {
+      apiKey: "AIzaSyApAbbhcI5XaKXE786DJ90KfAI0IHLukRA",
+      authDomain: "sklik-zbiroh.firebaseapp.com",
+      projectId: "sklik-zbiroh",
+      storageBucket: "sklik-zbiroh.firebasestorage.app",
+      messagingSenderId: "852429324134",
+      appId: "1:852429324134:web:971d7a27bea240ba5292a7",
+      measurementId: "G-1REEZ838SK"
+    };
+    // Inicializace Firebase a Firestore
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+  </script>
 </head>
 <body>
 <div class="container">
@@ -37,7 +55,7 @@
       <input type="number" class="form-control" id="dailyBudget" value="333" required>
     </div>
     
-    <!-- Kategorie – použijeme collapse pro přehlednost -->
+    <!-- Kategorie CELKOVĚ -->
     <div class="mb-3">
       <h3 class="category-header" data-bs-toggle="collapse" data-bs-target="#overallCollapse">
         Celkově (kliknutím skrýt/ukázat)
@@ -47,18 +65,20 @@
       </div>
     </div>
     
+    <!-- Kategorie UMÍSTĚNÍ -->
     <div class="mb-3">
       <h3 class="category-header" data-bs-toggle="collapse" data-bs-target="#placementCollapse">
-        Umístění (CPC Max) (kliknutím skrýt/ukázat)
+        Umístění (kliknutím skrýt/ukázat)
       </h3>
       <div id="placementCollapse" class="collapse show">
         <div id="placementData"></div>
       </div>
     </div>
     
+    <!-- Kategorie TÉMA -->
     <div class="mb-3">
       <h3 class="category-header" data-bs-toggle="collapse" data-bs-target="#topicCollapse">
-        Téma (CPC Max) (kliknutím skrýt/ukázat)
+        Téma (kliknutím skrýt/ukázat)
       </h3>
       <div id="topicCollapse" class="collapse show">
         <div id="topicData"></div>
@@ -102,35 +122,47 @@
 document.addEventListener('DOMContentLoaded', function() {
 
   // ----- POMOCNÉ FUNKCE -----
-  // Vygeneruje HTML pro časové intervaly (6:00 - 24:00) pro zadaný prefix (např. overall, placement, topic)
+  // Generuje HTML pro časové intervaly od 6:00 do 24:00.
+  // U "placement" a "topic" přidává také pole "Cena za proklik (Kč)" s default hodnotou.
   const generateTimeIntervalsHTML = (prefix) => {
     let html = '';
     for (let hour = 6; hour < 24; hour++) {
       let nextHour = hour + 1;
+      let defaultCPC = "";
+      if(prefix === 'placement') { defaultCPC = "3"; }
+      if(prefix === 'topic') { defaultCPC = "2.5"; }
       html += `
       <div class="time-interval">
         <h5>${hour}:00 - ${nextHour}:00</h5>
         <div class="row">
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label>Celkové prokliky</label>
             <input type="number" class="form-control" id="${prefix}_clicks_${hour}" min="0" value="0">
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label>Celková zobrazení</label>
             <input type="number" class="form-control" id="${prefix}_impressions_${hour}" min="0" value="0">
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label>Intervalové prokliky</label>
             <input type="number" class="form-control" id="${prefix}_interval_clicks_${hour}" min="0" value="0">
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label>Intervalová zobrazení</label>
             <input type="number" class="form-control" id="${prefix}_interval_impressions_${hour}" min="0" value="0">
           </div>
-        </div>
-        <div class="mt-2">
-          <label>Procentuální změna (%)</label>
-          <input type="number" class="form-control" id="${prefix}_percentage_${hour}" min="0" value="100">
+          <div class="col-md-2">
+            <label>Procentuální změna (%)</label>
+            <input type="number" class="form-control" id="${prefix}_percentage_${hour}" min="0" value="100">
+          </div>`;
+      if(prefix === 'placement' || prefix === 'topic'){
+        html += `
+          <div class="col-md-2">
+            <label>Cena za proklik (Kč)</label>
+            <input type="number" step="0.01" class="form-control" id="${prefix}_cpc_${hour}" value="${defaultCPC}">
+          </div>`;
+      }
+      html += `
         </div>
         <div class="form-check mt-2">
           <input class="form-check-input" type="checkbox" id="${prefix}_active_${hour}" checked>
@@ -142,14 +174,12 @@ document.addEventListener('DOMContentLoaded', function() {
     return html;
   };
 
-  // Vrací český název dne podle zadaného data (YYYY-MM-DD)
   const getCzechDayOfWeek = (dateStr) => {
     let date = new Date(dateStr);
-    const days = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
+    const days = ['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
     return days[date.getDay()];
   };
 
-  // Vrací výchozí hodnoty pro kategorii (všechny hodnoty = 0, checkbox false)
   const getDefaultCategory = () => {
     let cat = {};
     for (let hour = 6; hour < 24; hour++) {
@@ -158,7 +188,6 @@ document.addEventListener('DOMContentLoaded', function() {
     return cat;
   };
 
-  // Vrací výchozí záznam pro dané datum
   const getDefaultRecord = (date) => {
     return {
       entryDate: date,
@@ -166,13 +195,12 @@ document.addEventListener('DOMContentLoaded', function() {
       dailyBudget: 0,
       categories: {
         overall: getDefaultCategory(),
-        placement: getDefaultCategory(),
-        topic: getDefaultCategory()
+        placement: Object.assign(getDefaultCategory(), {}),
+        topic: Object.assign(getDefaultCategory(), {})
       }
     };
   };
 
-  // Vrací pole dat (ve formátu YYYY-MM-DD) pro všechny dny mezi startDate a endDate (včetně)
   const getDatesInRange = (startDate, endDate) => {
     let dates = [];
     let current = new Date(startDate);
@@ -184,62 +212,67 @@ document.addEventListener('DOMContentLoaded', function() {
     return dates;
   };
 
-  // ----- NASTAVENÍ FORMULÁŘE A ULOŽENÍ DAT -----
-  // Vložíme HTML časových intervalů do sekcí pro každou kategorii
+  // ----- NASTAVENÍ FORMULÁŘE A ULOŽENÍ DAT DO FIRESTORE -----
   document.getElementById('overallData').innerHTML = generateTimeIntervalsHTML('overall');
   document.getElementById('placementData').innerHTML = generateTimeIntervalsHTML('placement');
   document.getElementById('topicData').innerHTML = generateTimeIntervalsHTML('topic');
 
-  // Po změně data nastavíme den v týdnu a (pokud existují) načteme data
+  // Při změně data nastavíme den v týdnu a načteme data z Firestore
   document.getElementById('entryDate').addEventListener('change', function() {
     let dateVal = this.value;
-    if (dateVal) {
+    if(dateVal) {
       document.getElementById('dayOfWeek').value = getCzechDayOfWeek(dateVal);
-      loadDataForDate(dateVal);
+      // Načteme data z Firestore místo z localStorage
+      db.collection("sklikData").doc(dateVal).get()
+      .then((doc) => {
+        if (doc.exists) {
+          let record = doc.data();
+          document.getElementById('dailyBudget').value = record.dailyBudget;
+          const loadCategoryData = (prefix, catData) => {
+            for (let hour = 6; hour < 24; hour++) {
+              if (catData[hour]) {
+                document.getElementById(`${prefix}_clicks_${hour}`).value = catData[hour].totalClicks;
+                document.getElementById(`${prefix}_impressions_${hour}`).value = catData[hour].totalImpressions;
+                document.getElementById(`${prefix}_interval_clicks_${hour}`).value = catData[hour].intervalClicks;
+                document.getElementById(`${prefix}_interval_impressions_${hour}`).value = catData[hour].intervalImpressions;
+                document.getElementById(`${prefix}_percentage_${hour}`).value = catData[hour].percentage;
+                document.getElementById(`${prefix}_active_${hour}`).checked = catData[hour].active;
+                if(prefix === 'placement' || prefix === 'topic'){
+                  document.getElementById(`${prefix}_cpc_${hour}`).value = catData[hour].cpc || "";
+                }
+              }
+            }
+          };
+          loadCategoryData('overall', record.categories.overall);
+          loadCategoryData('placement', record.categories.placement);
+          loadCategoryData('topic', record.categories.topic);
+        } else {
+          // Dokument neexistuje – resetujeme data
+          const resetCategoryData = (prefix) => {
+            for (let hour = 6; hour < 24; hour++) {
+              document.getElementById(`${prefix}_clicks_${hour}`).value = 0;
+              document.getElementById(`${prefix}_impressions_${hour}`).value = 0;
+              document.getElementById(`${prefix}_interval_clicks_${hour}`).value = 0;
+              document.getElementById(`${prefix}_interval_impressions_${hour}`).value = 0;
+              document.getElementById(`${prefix}_percentage_${hour}`).value = 100;
+              document.getElementById(`${prefix}_active_${hour}`).checked = true;
+              if(prefix === 'placement' || prefix === 'topic'){
+                document.getElementById(`${prefix}_cpc_${hour}`).value = (prefix === 'placement' ? "3" : "2.5");
+              }
+            }
+          };
+          resetCategoryData('overall');
+          resetCategoryData('placement');
+          resetCategoryData('topic');
+        }
+      })
+      .catch((error) => {
+        console.error("Chyba při načítání dat: ", error);
+      });
     }
   });
 
-  // Načte data z LocalStorage pro dané datum a předvyplní formulář
-  const loadDataForDate = (dateVal) => {
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    let record = dataArr.find(item => item.entryDate === dateVal);
-    if (record) {
-      document.getElementById('dailyBudget').value = record.dailyBudget;
-      const loadCategoryData = (prefix, catData) => {
-        for (let hour = 6; hour < 24; hour++) {
-          if (catData[hour]) {
-            document.getElementById(`${prefix}_clicks_${hour}`).value = catData[hour].totalClicks;
-            document.getElementById(`${prefix}_impressions_${hour}`).value = catData[hour].totalImpressions;
-            document.getElementById(`${prefix}_interval_clicks_${hour}`).value = catData[hour].intervalClicks;
-            document.getElementById(`${prefix}_interval_impressions_${hour}`).value = catData[hour].intervalImpressions;
-            document.getElementById(`${prefix}_percentage_${hour}`).value = catData[hour].percentage;
-            document.getElementById(`${prefix}_active_${hour}`).checked = catData[hour].active;
-          }
-        }
-      };
-      loadCategoryData('overall', record.categories.overall);
-      loadCategoryData('placement', record.categories.placement);
-      loadCategoryData('topic', record.categories.topic);
-    } else {
-      // Pokud záznam neexistuje, resetujeme hodnoty v kategoriích
-      const resetCategoryData = (prefix) => {
-        for (let hour = 6; hour < 24; hour++) {
-          document.getElementById(`${prefix}_clicks_${hour}`).value = 0;
-          document.getElementById(`${prefix}_impressions_${hour}`).value = 0;
-          document.getElementById(`${prefix}_interval_clicks_${hour}`).value = 0;
-          document.getElementById(`${prefix}_interval_impressions_${hour}`).value = 0;
-          document.getElementById(`${prefix}_percentage_${hour}`).value = 100;
-          document.getElementById(`${prefix}_active_${hour}`).checked = true;
-        }
-      };
-      resetCategoryData('overall');
-      resetCategoryData('placement');
-      resetCategoryData('topic');
-    }
-  };
-
-  // Uložení (nebo aktualizace) dat do LocalStorage
+  // Ukládání dat – místo localStorage ukládáme do Firestore
   document.getElementById('dailyDataForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
@@ -262,320 +295,342 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     };
 
-    const getCategoryData = (prefix) => {
-      let catData = {};
-      for (let hour = 6; hour < 24; hour++) {
-        catData[hour] = {
-          totalClicks: parseInt(document.getElementById(`${prefix}_clicks_${hour}`).value) || 0,
-          totalImpressions: parseInt(document.getElementById(`${prefix}_impressions_${hour}`).value) || 0,
-          intervalClicks: parseInt(document.getElementById(`${prefix}_interval_clicks_${hour}`).value) || 0,
-          intervalImpressions: parseInt(document.getElementById(`${prefix}_interval_impressions_${hour}`).value) || 0,
-          percentage: parseFloat(document.getElementById(`${prefix}_percentage_${hour}`).value) || 100,
-          active: document.getElementById(`${prefix}_active_${hour}`).checked
-        };
-      }
-      return catData;
-    };
-
-    dayData.categories.overall = getCategoryData('overall');
-    dayData.categories.placement = getCategoryData('placement');
-    dayData.categories.topic = getCategoryData('topic');
-
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    let existingIndex = dataArr.findIndex(item => item.entryDate === entryDate);
-    if (existingIndex > -1) {
-      dataArr[existingIndex] = dayData;
-    } else {
-      dataArr.push(dayData);
+    dayData.categories.overall = {};
+    for (let hour = 6; hour < 24; hour++) {
+      dayData.categories.overall[hour] = {
+        totalClicks: parseInt(document.getElementById(`overall_clicks_${hour}`).value) || 0,
+        totalImpressions: parseInt(document.getElementById(`overall_impressions_${hour}`).value) || 0,
+        intervalClicks: parseInt(document.getElementById(`overall_interval_clicks_${hour}`).value) || 0,
+        intervalImpressions: parseInt(document.getElementById(`overall_interval_impressions_${hour}`).value) || 0,
+        percentage: parseFloat(document.getElementById(`overall_percentage_${hour}`).value) || 100,
+        active: document.getElementById(`overall_active_${hour}`).checked
+      };
     }
-    localStorage.setItem('sklikData', JSON.stringify(dataArr));
+    dayData.categories.placement = {};
+    for (let hour = 6; hour < 24; hour++) {
+      dayData.categories.placement[hour] = {
+        totalClicks: parseInt(document.getElementById(`placement_clicks_${hour}`).value) || 0,
+        totalImpressions: parseInt(document.getElementById(`placement_impressions_${hour}`).value) || 0,
+        intervalClicks: parseInt(document.getElementById(`placement_interval_clicks_${hour}`).value) || 0,
+        intervalImpressions: parseInt(document.getElementById(`placement_interval_impressions_${hour}`).value) || 0,
+        percentage: parseFloat(document.getElementById(`placement_percentage_${hour}`).value) || 100,
+        active: document.getElementById(`placement_active_${hour}`).checked,
+        cpc: parseFloat(document.getElementById(`placement_cpc_${hour}`).value.replace(',', '.')) || 0
+      };
+    }
+    dayData.categories.topic = {};
+    for (let hour = 6; hour < 24; hour++) {
+      dayData.categories.topic[hour] = {
+        totalClicks: parseInt(document.getElementById(`topic_clicks_${hour}`).value) || 0,
+        totalImpressions: parseInt(document.getElementById(`topic_impressions_${hour}`).value) || 0,
+        intervalClicks: parseInt(document.getElementById(`topic_interval_clicks_${hour}`).value) || 0,
+        intervalImpressions: parseInt(document.getElementById(`topic_interval_impressions_${hour}`).value) || 0,
+        percentage: parseFloat(document.getElementById(`topic_percentage_${hour}`).value) || 100,
+        active: document.getElementById(`topic_active_${hour}`).checked,
+        cpc: parseFloat(document.getElementById(`topic_cpc_${hour}`).value.replace(',', '.')) || 0
+      };
+    }
     
-    alert('Data byla uložena.');
+    db.collection("sklikData").doc(entryDate).set(dayData)
+    .then(() => {
+      alert("Data byla uložena do Firebase.");
+    })
+    .catch((error) => {
+      console.error("Chyba při ukládání dat: ", error);
+    });
   });
 
-  // ----- GENEROVÁNÍ MĚSÍČNÍHO REPORTU -----
-  // Zde vytvoříme dvě sekce: agregovaný denní report a detailní intervalový report
+  // ----- GENEROVÁNÍ REPORTŮ -----
+  // Pro reporty nyní načítáme data z Firebase (všechny dokumenty z kolekce "sklikData")
   document.getElementById('generateReport').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    
-    // Vytvoříme pole dnů v rozsahu (pokud je zadán od–do), jinak použijeme dostupná data
-    let dates;
-    if (fromDate && toDate) {
-      dates = getDatesInRange(fromDate, toDate);
-    } else {
-      dates = dataArr.map(item => item.entryDate);
-      dates = [...new Set(dates)];
-      dates.sort();
-    }
-    
-    // Pro každý den získáme záznam, nebo výchozí hodnoty
-    let records = dates.map(date => {
-      let rec = dataArr.find(item => item.entryDate === date);
-      if (!rec) rec = getDefaultRecord(date);
-      return rec;
-    });
-    
-    let reportHTML = `<h4>Agregovaný denní report</h4>`;
-    reportHTML += `<p><strong>Období:</strong> ${fromDate || "od začátku"} – ${toDate || "do konce"}</p>`;
-    reportHTML += `<table class="table table-bordered">
-                     <thead>
-                       <tr>
-                         <th>Datum</th>
-                         <th>Den</th>
-                         <th>Rozpočet (Kč)</th>
-                         <th>Celkové prokliky</th>
-                         <th>Celková zobrazení</th>
-                       </tr>
-                     </thead>
-                     <tbody>`;
-    records.forEach(day => {
-      let totalClicks = 0, totalImpressions = 0;
-      for (let hour = 6; hour < 24; hour++) {
-        totalClicks += day.categories.overall[hour].totalClicks;
-        totalImpressions += day.categories.overall[hour].totalImpressions;
-      }
-      reportHTML += `<tr>
-                       <td>${day.entryDate}</td>
-                       <td>${day.dayOfWeek}</td>
-                       <td>${day.dailyBudget}</td>
-                       <td>${totalClicks}</td>
-                       <td>${totalImpressions}</td>
-                     </tr>`;
-    });
-    reportHTML += `</tbody></table>`;
-    
-    // Detailní intervalový report – pro každý den a každou kategorii
-    reportHTML += `<h4>Detailní intervalový report</h4>`;
-    records.forEach(day => {
-      reportHTML += `<h5>Den: ${day.entryDate} (${day.dayOfWeek}), Rozpočet: ${day.dailyBudget} Kč</h5>`;
-      const categories = ['overall', 'placement', 'topic'];
-      const categoryNames = { overall: 'Celkově', placement: 'Umístění (CPC Max)', topic: 'Téma (CPC Max)' };
-      categories.forEach(cat => {
-        reportHTML += `<h6>${categoryNames[cat]}</h6>`;
-        reportHTML += `<table class="table table-bordered">
-                         <thead>
-                           <tr>
-                             <th>Časový interval</th>
-                             <th>Celkové prokliky</th>
-                             <th>Celková zobrazení</th>
-                             <th>Intervalové prokliky</th>
-                             <th>Intervalová zobrazení</th>
-                             <th>Procentuální změna (%)</th>
-                             <th>Aktivní</th>
-                           </tr>
-                         </thead>
-                         <tbody>`;
-        for (let hour = 6; hour < 24; hour++) {
-          let d = day.categories[cat][hour];
-          reportHTML += `<tr>
-                           <td>${hour}:00 – ${hour+1}:00</td>
-                           <td>${d.totalClicks}</td>
-                           <td>${d.totalImpressions}</td>
-                           <td>${d.intervalClicks}</td>
-                           <td>${d.intervalImpressions}</td>
-                           <td>${d.percentage}</td>
-                           <td>${d.active ? 'Ano' : 'Ne'}</td>
-                         </tr>`;
-        }
-        reportHTML += `</tbody></table>`;
+    db.collection("sklikData").get()
+    .then((querySnapshot) => {
+      let records = [];
+      querySnapshot.forEach((doc) => {
+        records.push(doc.data());
       });
+      // Filtrovat dle rozsahu, pokud je zadán
+      if(fromDate && toDate) {
+        records = records.filter(rec => rec.entryDate >= fromDate && rec.entryDate <= toDate);
+      }
+      // Seřadit záznamy podle data
+      records.sort((a, b) => a.entryDate.localeCompare(b.entryDate));
+      
+      // Agregovaný denní report
+      let aggHTML = `<h4>Agregovaný denní report</h4>`;
+      aggHTML += `<p><strong>Období:</strong> ${fromDate || "od začátku"} – ${toDate || "do konce"}</p>`;
+      aggHTML += `<table class="table table-bordered">
+                    <thead>
+                      <tr>
+                        <th>Datum</th>
+                        <th>Den</th>
+                        <th>Rozpočet (Kč)</th>
+                        <th>Celkové prokliky (Celkově)</th>
+                        <th>Celková zobrazení (Celkově)</th>
+                        <th>Prokliky (Umístění)</th>
+                        <th>Náklady (Umístění)</th>
+                        <th>Prokliky (Téma)</th>
+                        <th>Náklady (Téma)</th>
+                      </tr>
+                    </thead>
+                    <tbody>`;
+      records.forEach(day => {
+        let overallClicks = 0, overallImpressions = 0;
+        for (let hour = 6; hour < 24; hour++) {
+          overallClicks += day.categories.overall[hour].totalClicks;
+          overallImpressions += day.categories.overall[hour].totalImpressions;
+        }
+        let placementClicks = 0, placementCost = 0;
+        for (let hour = 6; hour < 24; hour++) {
+          placementClicks += day.categories.placement[hour].totalClicks;
+          placementCost += day.categories.placement[hour].intervalClicks * day.categories.placement[hour].cpc;
+        }
+        let topicClicks = 0, topicCost = 0;
+        for (let hour = 6; hour < 24; hour++) {
+          topicClicks += day.categories.topic[hour].totalClicks;
+          topicCost += day.categories.topic[hour].intervalClicks * day.categories.topic[hour].cpc;
+        }
+        
+        aggHTML += `<tr>
+                      <td>${day.entryDate}</td>
+                      <td>${day.dayOfWeek}</td>
+                      <td>${day.dailyBudget}</td>
+                      <td>${overallClicks}</td>
+                      <td>${overallImpressions}</td>
+                      <td>${placementClicks}</td>
+                      <td>${placementCost.toFixed(2)}</td>
+                      <td>${topicClicks}</td>
+                      <td>${topicCost.toFixed(2)}</td>
+                    </tr>`;
+      });
+      aggHTML += `</tbody></table>`;
+      document.getElementById('reportResult').innerHTML = aggHTML;
+    })
+    .catch((error) => {
+      console.error("Chyba při načítání dat: ", error);
     });
-    
-    document.getElementById('reportResult').innerHTML = reportHTML;
   });
 
-  // ----- EXPORTY REPORTŮ -----
-  // Export agregovaného denního reportu do CSV
+  // ----- EXPORT AGREGOVANÉHO (DENNÍHO) REPORTU -----
   document.getElementById('exportDailyCSV').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    let dates;
-    if (fromDate && toDate) {
-      dates = getDatesInRange(fromDate, toDate);
-    } else {
-      dates = dataArr.map(item => item.entryDate);
-      dates = [...new Set(dates)];
-      dates.sort();
-    }
-    let records = dates.map(date => {
-      let rec = dataArr.find(item => item.entryDate === date);
-      if (!rec) rec = getDefaultRecord(date);
-      return rec;
-    });
-    
-    let csvRows = [];
-    csvRows.push("Datum;Den;Rozpočet (Kč);Celkové prokliky;Celková zobrazení");
-    records.forEach(day => {
-      let totalClicks = 0, totalImpressions = 0;
-      for (let hour = 6; hour < 24; hour++) {
-        totalClicks += day.categories.overall[hour].totalClicks;
-        totalImpressions += day.categories.overall[hour].totalImpressions;
+    db.collection("sklikData").get()
+    .then((querySnapshot) => {
+      let records = [];
+      querySnapshot.forEach((doc) => {
+        records.push(doc.data());
+      });
+      if(fromDate && toDate) {
+        records = records.filter(rec => rec.entryDate >= fromDate && rec.entryDate <= toDate);
       }
-      csvRows.push(`"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${totalClicks}";"${totalImpressions}"`);
+      records.sort((a, b) => a.entryDate.localeCompare(b.entryDate));
+      
+      let csvRows = [];
+      csvRows.push("Datum;Den;Rozpočet (Kč);Celkové prokliky;Celková zobrazení;Prokliky (Umístění);Náklady (Umístění);Prokliky (Téma);Náklady (Téma)");
+      records.forEach(day => {
+        let overallClicks = 0, overallImpressions = 0;
+        for (let hour = 6; hour < 24; hour++) {
+          overallClicks += day.categories.overall[hour].totalClicks;
+          overallImpressions += day.categories.overall[hour].totalImpressions;
+        }
+        let placementClicks = 0, placementCost = 0;
+        for (let hour = 6; hour < 24; hour++) {
+          placementClicks += day.categories.placement[hour].totalClicks;
+          placementCost += day.categories.placement[hour].intervalClicks * day.categories.placement[hour].cpc;
+        }
+        let topicClicks = 0, topicCost = 0;
+        for (let hour = 6; hour < 24; hour++) {
+          topicClicks += day.categories.topic[hour].totalClicks;
+          topicCost += day.categories.topic[hour].intervalClicks * day.categories.topic[hour].cpc;
+        }
+        
+        csvRows.push(`${day.entryDate};${day.dayOfWeek};${day.dailyBudget};${overallClicks};${overallImpressions};${placementClicks};${placementCost.toFixed(2)};${topicClicks};${topicCost.toFixed(2)}`);
+      });
+      
+      let csvContent = "\uFEFF" + csvRows.join("\n");
+      let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
+      let link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "sklik_monthly_report.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    })
+    .catch((error) => {
+      console.error("Chyba při exportu: ", error);
     });
-    let csvContent = "\uFEFF" + csvRows.join("\n");
-    let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
-    let link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "sklik_monthly_report.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   });
 
-  // Export agregovaného denního reportu do PDF
   document.getElementById('exportDailyPDF').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    let dates;
-    if (fromDate && toDate) {
-      dates = getDatesInRange(fromDate, toDate);
-    } else {
-      dates = dataArr.map(item => item.entryDate);
-      dates = [...new Set(dates)];
-      dates.sort();
-    }
-    let records = dates.map(date => {
-      let rec = dataArr.find(item => item.entryDate === date);
-      if (!rec) rec = getDefaultRecord(date);
-      return rec;
-    });
-    
-    let rows = [];
-    records.forEach(day => {
-      let totalClicks = 0, totalImpressions = 0;
-      for (let hour = 6; hour < 24; hour++) {
-        totalClicks += day.categories.overall[hour].totalClicks;
-        totalImpressions += day.categories.overall[hour].totalImpressions;
+    db.collection("sklikData").get()
+    .then((querySnapshot) => {
+      let records = [];
+      querySnapshot.forEach((doc) => {
+        records.push(doc.data());
+      });
+      if(fromDate && toDate) {
+        records = records.filter(rec => rec.entryDate >= fromDate && rec.entryDate <= toDate);
       }
-      rows.push(`${day.entryDate} | ${day.dayOfWeek} | ${day.dailyBudget} | ${totalClicks} | ${totalImpressions}`);
+      records.sort((a, b) => a.entryDate.localeCompare(b.entryDate));
+      
+      let rows = [];
+      records.forEach(day => {
+        let overallClicks = 0, overallImpressions = 0;
+        for (let hour = 6; hour < 24; hour++) {
+          overallClicks += day.categories.overall[hour].totalClicks;
+          overallImpressions += day.categories.overall[hour].totalImpressions;
+        }
+        let placementClicks = 0, placementCost = 0;
+        for (let hour = 6; hour < 24; hour++) {
+          placementClicks += day.categories.placement[hour].totalClicks;
+          placementCost += day.categories.placement[hour].intervalClicks * day.categories.placement[hour].cpc;
+        }
+        let topicClicks = 0, topicCost = 0;
+        for (let hour = 6; hour < 24; hour++) {
+          topicClicks += day.categories.topic[hour].totalClicks;
+          topicCost += day.categories.topic[hour].intervalClicks * day.categories.topic[hour].cpc;
+        }
+        
+        rows.push(`${day.entryDate} | ${day.dayOfWeek} | ${day.dailyBudget} | ${overallClicks} | ${overallImpressions} | ${placementClicks} | ${placementCost.toFixed(2)} | ${topicClicks} | ${topicCost.toFixed(2)}`);
+      });
+      
+      const { jsPDF } = window.jspdf;
+      let doc = new jsPDF();
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(10);
+      let rowY = 10;
+      doc.text("Měsíční report", 10, rowY);
+      rowY += 10;
+      doc.text("Období: " + (fromDate || "od začátku") + " - " + (toDate || "do konce"), 10, rowY);
+      rowY += 10;
+      doc.text("Datum | Den | Rozpočet | Celkové prokliky | Celková zobrazení | Prokliky (Umístění) | Náklady (Umístění) | Prokliky (Téma) | Náklady (Téma)", 10, rowY);
+      rowY += 8;
+      rows.forEach(line => {
+        doc.text(line, 10, rowY);
+        rowY += 6;
+        if (rowY > 280) {
+          doc.addPage();
+          rowY = 10;
+        }
+      });
+      doc.save("sklik_monthly_report.pdf");
+    })
+    .catch((error) => {
+      console.error("Chyba při exportu: ", error);
     });
-    
-    const { jsPDF } = window.jspdf;
-    let doc = new jsPDF();
-    doc.setFont("Helvetica", "normal");
-    doc.setFontSize(10);
-    let rowY = 10;
-    doc.text("Měsíční report", 10, rowY);
-    rowY += 10;
-    doc.text("Období: " + (fromDate || "od začátku") + " - " + (toDate || "do konce"), 10, rowY);
-    rowY += 10;
-    doc.text("Datum | Den | Rozpočet | Celkové prokliky | Celková zobrazení", 10, rowY);
-    rowY += 8;
-    rows.forEach(line => {
-      doc.text(line, 10, rowY);
-      rowY += 6;
-      if (rowY > 280) {
-        doc.addPage();
-        rowY = 10;
-      }
-    });
-    doc.save("sklik_monthly_report.pdf");
   });
 
-  // Export detailního intervalového reportu do CSV
+  // ----- EXPORT DETAILNÍHO INTERVALOVÉHO REPORTU -----
   document.getElementById('exportIntervalCSV').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    let dates;
-    if (fromDate && toDate) {
-      dates = getDatesInRange(fromDate, toDate);
-    } else {
-      dates = dataArr.map(x => x.entryDate);
-      dates = [...new Set(dates)];
-      dates.sort();
-    }
-    let records = dates.map(date => {
-      let rec = dataArr.find(item => item.entryDate === date);
-      if (!rec) rec = getDefaultRecord(date);
-      return rec;
-    });
-    const categories = ['overall', 'placement', 'topic'];
-    let csvContent = "\uFEFFDatum;Den;Kategorie;Časový interval;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení;Procentuální změna;Aktivní\n";
-    records.forEach(day => {
-      categories.forEach(cat => {
-        for (let hour = 6; hour < 24; hour++) {
-          let d = day.categories[cat][hour];
-          csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}";"${d.percentage}";"${d.active ? 'Ano' : 'Ne'}"\n`;
-        }
+    db.collection("sklikData").get()
+    .then((querySnapshot) => {
+      let records = [];
+      querySnapshot.forEach((doc) => {
+        records.push(doc.data());
       });
+      if(fromDate && toDate) {
+        records = records.filter(rec => rec.entryDate >= fromDate && rec.entryDate <= toDate);
+      }
+      records.sort((a, b) => a.entryDate.localeCompare(b.entryDate));
+      
+      const categories = ['overall', 'placement', 'topic'];
+      // Přidáme do hlavičky i sloupce Rozpočet a Cena za proklik (Kč)
+      let csvContent = "\uFEFFDatum;Den;Rozpočet (Kč);Kategorie;Časový interval;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení;Procentuální změna;Aktivní;Cena za proklik (Kč)\n";
+      records.forEach(day => {
+        categories.forEach(cat => {
+          for (let hour = 6; hour < 24; hour++) {
+            let d = day.categories[cat][hour];
+            let cpc = "";
+            if(cat === "placement" || cat === "topic"){
+              if(d.cpc !== undefined && d.cpc !== null && d.cpc !== "") {
+                // Zajistíme formát ="<hodnota>" bez nadbytečných uvozovek
+                cpc = '="' + d.cpc + '"';
+              }
+            }
+            csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}";"${d.percentage}";"${d.active ? 'Ano' : 'Ne'}";` + cpc + `\n`;
+          }
+        });
+      });
+      let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
+      let link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "sklik_interval_report.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    })
+    .catch((error) => {
+      console.error("Chyba při exportu: ", error);
     });
-    let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
-    let link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "sklik_interval_report.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   });
 
-  // Export detailního intervalového reportu do PDF
   document.getElementById('exportIntervalPDF').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
-    let dates;
-    if (fromDate && toDate) {
-      dates = getDatesInRange(fromDate, toDate);
-    } else {
-      dates = dataArr.map(x => x.entryDate);
-      dates = [...new Set(dates)];
-      dates.sort();
-    }
-    let records = dates.map(date => {
-      let rec = dataArr.find(item => item.entryDate === date);
-      if (!rec) rec = getDefaultRecord(date);
-      return rec;
-    });
-    const categories = ['overall', 'placement', 'topic'];
-    const categoryNames = { overall: 'Celkově', placement: 'Umístění (CPC Max)', topic: 'Téma (CPC Max)' };
-    const { jsPDF } = window.jspdf;
-    let doc = new jsPDF();
-    doc.setFont("Helvetica", "normal");
-    doc.setFontSize(8);
-    let rowY = 10;
-    doc.text("Detailní intervalový report", 10, rowY);
-    rowY += 8;
-    records.forEach(day => {
-      categories.forEach(cat => {
-        doc.text(`Datum: ${day.entryDate} (${day.dayOfWeek}) – Kategorie: ${categoryNames[cat]}`, 10, rowY);
-        rowY += 8;
-        doc.text("Časový interval | Celkové prokliky | Celková zobrazení | Intervalové prokliky | Intervalová zobrazení | Procentuální změna | Aktivní", 10, rowY);
-        rowY += 8;
-        for (let hour = 6; hour < 24; hour++) {
-          let d = day.categories[cat][hour];
-          let line = `${hour}:00-${hour+1}:00 | ${d.totalClicks} | ${d.totalImpressions} | ${d.intervalClicks} | ${d.intervalImpressions} | ${d.percentage} | ${d.active ? 'Ano' : 'Ne'}`;
-          doc.text(line, 10, rowY);
-          rowY += 6;
+    db.collection("sklikData").get()
+    .then((querySnapshot) => {
+      let records = [];
+      querySnapshot.forEach((doc) => {
+        records.push(doc.data());
+      });
+      if(fromDate && toDate) {
+        records = records.filter(rec => rec.entryDate >= fromDate && rec.entryDate <= toDate);
+      }
+      records.sort((a, b) => a.entryDate.localeCompare(b.entryDate));
+      
+      const categories = ['overall', 'placement', 'topic'];
+      const categoryNames = { overall: 'Celkově', placement: 'Umístění', topic: 'Téma' };
+      const { jsPDF } = window.jspdf;
+      let doc = new jsPDF();
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(8);
+      let rowY = 10;
+      doc.text("Detailní intervalový report", 10, rowY);
+      rowY += 8;
+      records.forEach(day => {
+        categories.forEach(cat => {
+          let extra = "";
+          if (cat === "placement" || cat === "topic") {
+            extra = " (Cena: " + day.categories[cat][6].cpc + " Kč)";
+          }
+          doc.text(`Datum: ${day.entryDate} (${day.dayOfWeek}), Rozpočet: ${day.dailyBudget} Kč – Kategorie: ${categoryNames[cat]}${extra}`, 10, rowY);
+          rowY += 8;
+          doc.text("Časový interval | Celkové prokliky | Celková zobrazení | Intervalové prokliky | Intervalová zobrazení | Procentuální změna | Aktivní | Cena za proklik", 10, rowY);
+          rowY += 8;
+          for (let hour = 6; hour < 24; hour++) {
+            let d = day.categories[cat][hour];
+            let line = `${hour}:00-${hour+1}:00 | ${d.totalClicks} | ${d.totalImpressions} | ${d.intervalClicks} | ${d.intervalImpressions} | ${d.percentage} | ${d.active ? 'Ano' : 'Ne'} | ${ (cat === "overall" ? "" : d.cpc) }`;
+            doc.text(line, 10, rowY);
+            rowY += 6;
+            if (rowY > 280) {
+              doc.addPage();
+              rowY = 10;
+            }
+          }
+          rowY += 8;
           if (rowY > 280) {
             doc.addPage();
             rowY = 10;
           }
-        }
+        });
         rowY += 8;
         if (rowY > 280) {
           doc.addPage();
           rowY = 10;
         }
       });
-      rowY += 8;
-      if (rowY > 280) {
-        doc.addPage();
-        rowY = 10;
-      }
+      doc.save("sklik_interval_report.pdf");
+    })
+    .catch((error) => {
+      console.error("Chyba při exportu: ", error);
     });
-    doc.save("sklik_interval_report.pdf");
   });
 
 });
