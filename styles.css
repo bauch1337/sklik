@@ -1,5 +1,4 @@
-
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th, td { border: 1px solid black; padding: 5px; text-align: center; }
-        input { width: 80px; }
-        .disabled { background-color: #ddd; pointer-events: none; }
+ /* Několik základních úprav pro vzhled */
+    body { padding-top: 20px; }
+    .time-interval { margin-bottom: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
+    h5 { margin-bottom: 10px; }
