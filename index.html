@@ -66,8 +66,8 @@
   
   <hr class="my-4">
   
-  <!-- Reporty -->
-  <h2>Reporty</h2>
+  <!-- Měsíční report -->
+  <h2>Měsíční report</h2>
   <div class="row mb-3">
     <div class="col-md-6">
       <label for="reportFromDate" class="form-label">Od</label>
@@ -81,10 +81,10 @@
   <button id="generateReport" class="btn btn-secondary mb-3">Generovat report (zobrazit)</button>
   <div id="reportResult"></div>
   
-  <h3>Export reportů</h3>
+  <h3>Export reportu</h3>
   <div class="mb-3">
-    <button id="exportDailyCSV" class="btn btn-success mt-2 me-2">Export denní CSV</button>
-    <button id="exportDailyPDF" class="btn btn-danger mt-2 me-2">Export denní PDF</button>
+    <button id="exportDailyCSV" class="btn btn-success mt-2 me-2">Export CSV</button>
+    <button id="exportDailyPDF" class="btn btn-danger mt-2 me-2">Export PDF</button>
     <button id="exportIntervalCSV" class="btn btn-success mt-2 me-2">Export intervalový CSV</button>
     <button id="exportIntervalPDF" class="btn btn-danger mt-2">Export intervalový PDF</button>
   </div>
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // ---------------------------
   // POMOCNÉ FUNKCE
   // ---------------------------
-  // Vygeneruje HTML pro časové intervaly (6:00 - 24:00) pro daný prefix
+  // Vygeneruje HTML pro časové intervaly (6:00 - 24:00) pro daný prefix (např. overall, placement, topic)
   const generateTimeIntervalsHTML = (prefix) => {
     let html = '';
     for(let hour = 6; hour < 24; hour++) {
@@ -141,14 +141,14 @@ document.addEventListener('DOMContentLoaded', function() {
     return html;
   };
 
-  // Vrací český název dne na základě data
+  // Vrací český název dne podle zadaného data (YYYY-MM-DD)
   const getCzechDayOfWeek = (dateStr) => {
     let date = new Date(dateStr);
     const days = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
     return days[date.getDay()];
   };
 
-  // Vrací výchozí data pro kategorii (všechny hodnoty 0)
+  // Vrací výchozí data pro kategorii (pro každý interval nastaví 0 a false)
   const getDefaultCategory = () => {
     let cat = {};
     for(let hour = 6; hour < 24; hour++){
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return cat;
   };
 
-  // Vrací výchozí záznam pro dané datum
+  // Vrací výchozí záznam pro dané datum (pokud pro daný den není zadáno nic)
   const getDefaultRecord = (date) => {
     return {
       entryDate: date,
@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
   };
 
-  // Vrací pole řetězců ve formátu YYYY-MM-DD pro všechna data mezi start a end (včetně)
+  // Vrací pole dat (ve formátu YYYY-MM-DD) pro všechna data mezi start a end (včetně)
   const getDatesInRange = (startDate, endDate) => {
     let dates = [];
     let current = new Date(startDate);
@@ -186,12 +186,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // ---------------------------
   // NASTAVENÍ FORMULÁŘE A ULOŽENÍ DAT
   // ---------------------------
-  // Vložení HTML časových intervalů pro všechny kategorie
+  // Vložení HTML časových intervalů do sekcí pro všechny kategorie
   document.getElementById('overallData').innerHTML = generateTimeIntervalsHTML('overall');
   document.getElementById('placementData').innerHTML = generateTimeIntervalsHTML('placement');
   document.getElementById('topicData').innerHTML = generateTimeIntervalsHTML('topic');
 
-  // Při změně data nastavíme den v týdnu a načteme data (pokud existují)
+  // Po změně data nastavíme den v týdnu a načteme data (pokud existují)
   document.getElementById('entryDate').addEventListener('change', function() {
     let dateVal = this.value;
     if(dateVal) {
@@ -239,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
-  // Uložení/aktualizace dat do LocalStorage
+  // Uložení (nebo aktualizace) dat do LocalStorage
   document.getElementById('dailyDataForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
@@ -295,15 +295,15 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // ---------------------------
-  // GENEROVÁNÍ AGREGOVANÉHO REPORTU (zobrazení)
+  // GENEROVÁNÍ MĚSÍČNÍHO REPORTU – denní přehled
   // ---------------------------
   document.getElementById('generateReport').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
     let storedData = localStorage.getItem('sklikData');
     let dataArr = storedData ? JSON.parse(storedData) : [];
-
-    // Pokud je zadáno období, vygenerujeme pole všech dnů mezi startem a koncem.
+    
+    // Pokud jsou zadány oba datové rozsahy, vytvoříme seznam dnů mezi nimi, jinak použijeme dostupné dny
     let dates;
     if(fromDate && toDate) {
       dates = getDatesInRange(fromDate, toDate);
@@ -313,85 +313,99 @@ document.addEventListener('DOMContentLoaded', function() {
       dates.sort();
     }
     
-    // Pro každý den v období získáme záznam (nebo výchozí hodnoty)
+    // Pro každý den získáme záznam nebo výchozí data
     let records = dates.map(date => {
       let rec = dataArr.find(item => item.entryDate === date);
       if(!rec) { rec = getDefaultRecord(date); }
       return rec;
     });
-
-    // Agregace pro "denní" report – z kategorie overall
-    let aggBudget = 0, aggClicks = 0, aggImpressions = 0;
+    
+    // Pro každý den spočítáme součty z kategorie "Celkově"
+    let reportRows = [];
     records.forEach(day => {
-      aggBudget += parseFloat(day.dailyBudget);
+      let totalClicks = 0, totalImpressions = 0;
       for(let hour = 6; hour < 24; hour++){
-        aggClicks += day.categories.overall[hour].totalClicks;
-        aggImpressions += day.categories.overall[hour].totalImpressions;
+        totalClicks += day.categories.overall[hour].totalClicks;
+        totalImpressions += day.categories.overall[hour].totalImpressions;
       }
+      let cpc = totalClicks > 0 ? (day.dailyBudget / totalClicks).toFixed(2) : "N/A";
+      reportRows.push({
+        date: day.entryDate,
+        dayOfWeek: day.dayOfWeek,
+        budget: day.dailyBudget,
+        clicks: totalClicks,
+        impressions: totalImpressions,
+        cpc: cpc
+      });
     });
     
-    let reportHTML = `<h4>Agregovaný denní report (celkové hodnoty)</h4>`;
-    reportHTML += `<p><strong>Období:</strong> ${fromDate || 'od začátku'} - ${toDate || 'do konce'}</p>`;
-    reportHTML += `<table class="table table-bordered"><thead><tr>
-                     <th>Celkový rozpočet (Kč)</th>
-                     <th>Celkové prokliky</th>
-                     <th>Celková zobrazení</th>
-                   </tr></thead>`;
-    reportHTML += `<tbody><tr>
-                     <td>${aggBudget}</td>
-                     <td>${aggClicks}</td>
-                     <td>${aggImpressions}</td>
-                   </tr></tbody></table>`;
-    
-    // Agregace pro intervalový report – pro každou kategorii a každý interval
-    const categories = ['overall', 'placement', 'topic'];
-    const categoryNames = { overall: 'Celkově', placement: 'Umístění (CPC Max)', topic: 'Téma (CPC Max)' };
-    reportHTML += `<h4>Agregovaný intervalový report</h4>`;
-    categories.forEach(cat => {
-      reportHTML += `<h5>${categoryNames[cat]}</h5>`;
-      reportHTML += `<table class="table table-bordered"><thead><tr>
-                     <th>Hodina</th>
-                     <th>Celkové prokliky</th>
-                     <th>Celková zobrazení</th>
-                     <th>Intervalové prokliky</th>
-                     <th>Intervalová zobrazení</th>
-                   </tr></thead><tbody>`;
-      for(let hour = 6; hour < 24; hour++){
-        let sumClicks = 0, sumImpressions = 0, sumIntClicks = 0, sumIntImpressions = 0;
-        records.forEach(day => {
-          let d = day.categories[cat][hour];
-          sumClicks += d.totalClicks;
-          sumImpressions += d.totalImpressions;
-          sumIntClicks += d.intervalClicks;
-          sumIntImpressions += d.intervalImpressions;
-        });
-        reportHTML += `<tr>
-                         <td>${hour}:00 - ${hour+1}:00</td>
-                         <td>${sumClicks}</td>
-                         <td>${sumImpressions}</td>
-                         <td>${sumIntClicks}</td>
-                         <td>${sumIntImpressions}</td>
-                       </tr>`;
+    // Vypočítáme průměrné CPC (jen u dnů, kde jsou kliky)
+    let sumCpc = 0, countCpc = 0;
+    reportRows.forEach(row => {
+      if(row.cpc !== "N/A") {
+        sumCpc += parseFloat(row.cpc);
+        countCpc++;
       }
-      reportHTML += `</tbody></table>`;
     });
+    let avgCpc = countCpc > 0 ? (sumCpc / countCpc).toFixed(2) : 0;
+    
+    // Přidáme doporučení: pokud je CPC vyšší než průměr, doporučíme "Boost"
+    reportRows = reportRows.map(row => {
+      let recommendation = "";
+      if(row.cpc === "N/A") {
+        recommendation = "Žádné kliky";
+      } else if(parseFloat(row.cpc) > avgCpc) {
+        recommendation = "Boost";
+      }
+      return { ...row, recommendation };
+    });
+    
+    // Vykreslíme tabulku
+    let reportHTML = `<h4>Měsíční report (denní přehled)</h4>`;
+    reportHTML += `<p><strong>Období:</strong> ${fromDate || "od začátku"} - ${toDate || "do konce"}</p>`;
+    reportHTML += `<table class="table table-bordered">
+                     <thead>
+                       <tr>
+                         <th>Datum</th>
+                         <th>Den</th>
+                         <th>Rozpočet (Kč)</th>
+                         <th>Prokliky</th>
+                         <th>Zobrazení</th>
+                         <th>CPC</th>
+                         <th>Doporučení</th>
+                       </tr>
+                     </thead>
+                     <tbody>`;
+    reportRows.forEach(row => {
+      reportHTML += `<tr>
+                       <td>${row.date}</td>
+                       <td>${row.dayOfWeek}</td>
+                       <td>${row.budget}</td>
+                       <td>${row.clicks}</td>
+                       <td>${row.impressions}</td>
+                       <td>${row.cpc}</td>
+                       <td>${row.recommendation}</td>
+                     </tr>`;
+    });
+    reportHTML += `</tbody></table>`;
+    reportHTML += `<p><strong>Průměrné CPC v období:</strong> ${avgCpc}</p>`;
     document.getElementById('reportResult').innerHTML = reportHTML;
   });
 
   // ---------------------------
   // EXPORTY REPORTŮ
   // ---------------------------
-  // Export agregovaného denního reportu do CSV (používáme středník jako oddělovač)
+  // Export denního (měsíčního) reportu do CSV – každý den jako jeden řádek
   document.getElementById('exportDailyCSV').addEventListener('click', function() {
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
+    let storedData = localStorage.getItem('sklikData');
+    let dataArr = storedData ? JSON.parse(storedData) : [];
     let dates;
     if(fromDate && toDate) {
       dates = getDatesInRange(fromDate, toDate);
     } else {
-      dates = dataArr.map(x => x.entryDate);
+      dates = dataArr.map(item => item.entryDate);
       dates = [...new Set(dates)];
       dates.sort();
     }
@@ -400,37 +414,54 @@ document.addEventListener('DOMContentLoaded', function() {
       if(!rec) rec = getDefaultRecord(date);
       return rec;
     });
-    let aggBudget = 0, aggClicks = 0, aggImpressions = 0;
-    records.forEach(day => {
-      aggBudget += parseFloat(day.dailyBudget);
+    
+    let csvRows = [];
+    csvRows.push("Datum;Den;Rozpočet (Kč);Prokliky;Zobrazení;CPC;Doporučení");
+    
+    let sumCpc = 0, countCpc = 0;
+    let rows = records.map(day => {
+      let totalClicks = 0, totalImpressions = 0;
       for(let hour = 6; hour < 24; hour++){
-        aggClicks += day.categories.overall[hour].totalClicks;
-        aggImpressions += day.categories.overall[hour].totalImpressions;
+        totalClicks += day.categories.overall[hour].totalClicks;
+        totalImpressions += day.categories.overall[hour].totalImpressions;
       }
+      let cpc = totalClicks > 0 ? (day.dailyBudget / totalClicks).toFixed(2) : "N/A";
+      if(cpc !== "N/A") { sumCpc += parseFloat(cpc); countCpc++; }
+      return { date: day.entryDate, dayOfWeek: day.dayOfWeek, budget: day.dailyBudget, clicks: totalClicks, impressions: totalImpressions, cpc: cpc };
     });
-    let csvContent = "\uFEFFObdobí: " + (fromDate || "od začátku") + " - " + (toDate || "do konce") + "\n";
-    csvContent += "Celkový rozpočet (Kč);Celkové prokliky;Celková zobrazení\n";
-    csvContent += `"${aggBudget}";"${aggClicks}";"${aggImpressions}"\n`;
+    let avgCpc = countCpc > 0 ? (sumCpc / countCpc).toFixed(2) : 0;
+    
+    rows.forEach(row => {
+      let rec = "";
+      if(row.cpc === "N/A") {
+        rec = "Žádné kliky";
+      } else if(parseFloat(row.cpc) > avgCpc) {
+        rec = "Boost";
+      }
+      csvRows.push(`"${row.date}";"${row.dayOfWeek}";"${row.budget}";"${row.clicks}";"${row.impressions}";"${row.cpc}";"${rec}"`);
+    });
+    
+    let csvContent = "\uFEFF" + csvRows.join("\n");
     let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
     let link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "sklik_daily_report.csv");
+    link.setAttribute("download", "sklik_monthly_report.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   });
 
-  // Export agregovaného denního reportu do PDF
+  // Export denního (měsíčního) reportu do PDF
   document.getElementById('exportDailyPDF').addEventListener('click', function() {
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
+    let storedData = localStorage.getItem('sklikData');
+    let dataArr = storedData ? JSON.parse(storedData) : [];
     let dates;
     if(fromDate && toDate) {
       dates = getDatesInRange(fromDate, toDate);
     } else {
-      dates = dataArr.map(x => x.entryDate);
+      dates = dataArr.map(item => item.entryDate);
       dates = [...new Set(dates)];
       dates.sort();
     }
@@ -439,34 +470,60 @@ document.addEventListener('DOMContentLoaded', function() {
       if(!rec) rec = getDefaultRecord(date);
       return rec;
     });
-    let aggBudget = 0, aggClicks = 0, aggImpressions = 0;
+    
+    let rows = [];
+    let sumCpc = 0, countCpc = 0;
     records.forEach(day => {
-      aggBudget += parseFloat(day.dailyBudget);
+      let totalClicks = 0, totalImpressions = 0;
       for(let hour = 6; hour < 24; hour++){
-        aggClicks += day.categories.overall[hour].totalClicks;
-        aggImpressions += day.categories.overall[hour].totalImpressions;
+        totalClicks += day.categories.overall[hour].totalClicks;
+        totalImpressions += day.categories.overall[hour].totalImpressions;
       }
+      let cpc = totalClicks > 0 ? (day.dailyBudget / totalClicks).toFixed(2) : "N/A";
+      if(cpc !== "N/A") { sumCpc += parseFloat(cpc); countCpc++; }
+      rows.push({ date: day.entryDate, dayOfWeek: day.dayOfWeek, budget: day.dailyBudget, clicks: totalClicks, impressions: totalImpressions, cpc: cpc });
     });
+    let avgCpc = countCpc > 0 ? (sumCpc / countCpc).toFixed(2) : 0;
+    
+    rows = rows.map(row => {
+      let rec = "";
+      if(row.cpc === "N/A") { rec = "Žádné kliky"; }
+      else if(parseFloat(row.cpc) > avgCpc) { rec = "Boost"; }
+      return { ...row, recommendation: rec };
+    });
+    
     const { jsPDF } = window.jspdf;
     let doc = new jsPDF();
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(10);
     let rowY = 10;
-    doc.text("Agregovaný denní report", 10, rowY);
+    doc.text("Měsíční report", 10, rowY);
     rowY += 10;
     doc.text("Období: " + (fromDate || "od začátku") + " - " + (toDate || "do konce"), 10, rowY);
     rowY += 10;
-    let line = `Celkový rozpočet: ${aggBudget} Kč | Prokliky: ${aggClicks} | Zobrazení: ${aggImpressions}`;
-    doc.text(line, 10, rowY);
-    doc.save("sklik_daily_report.pdf");
+    doc.text("Datum | Den | Rozpočet | Prokliky | Zobrazení | CPC | Doporučení", 10, rowY);
+    rowY += 8;
+    rows.forEach(row => {
+      let line = `${row.date} | ${row.dayOfWeek} | ${row.budget} | ${row.clicks} | ${row.impressions} | ${row.cpc} | ${row.recommendation}`;
+      doc.text(line, 10, rowY);
+      rowY += 6;
+      if(rowY > 280) {
+        doc.addPage();
+        rowY = 10;
+      }
+    });
+    doc.save("sklik_monthly_report.pdf");
   });
 
-  // Export agregovaného intervalového reportu do CSV
+  // ---------------------------
+  // EXPORT INTERVALOVÉHO REPORTU – podrobný přehled pro každý den a interval
+  // ---------------------------
+  // Export do CSV – každý řádek obsahuje datum, den, kategorii, časový interval a intervalové hodnoty
   document.getElementById('exportIntervalCSV').addEventListener('click', function() {
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
+    let storedData = localStorage.getItem('sklikData');
+    let dataArr = storedData ? JSON.parse(storedData) : [];
     let dates;
     if(fromDate && toDate) {
       dates = getDatesInRange(fromDate, toDate);
@@ -481,20 +538,14 @@ document.addEventListener('DOMContentLoaded', function() {
       return rec;
     });
     const categories = ['overall', 'placement', 'topic'];
-    let csvContent = "\uFEFFObdobí: " + (fromDate || "od začátku") + " - " + (toDate || "do konce") + "\n";
-    csvContent += "Kategorie;Hodina;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení\n";
-    categories.forEach(cat => {
-      for(let hour = 6; hour < 24; hour++){
-        let sumClicks = 0, sumImpressions = 0, sumIntClicks = 0, sumIntImpressions = 0;
-        records.forEach(day => {
+    let csvContent = "\uFEFFDatum;Den;Kategorie;Hodina;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení\n";
+    records.forEach(day => {
+      categories.forEach(cat => {
+        for(let hour = 6; hour < 24; hour++){
           let d = day.categories[cat][hour];
-          sumClicks += d.totalClicks;
-          sumImpressions += d.totalImpressions;
-          sumIntClicks += d.intervalClicks;
-          sumIntImpressions += d.intervalImpressions;
-        });
-        csvContent += `"${cat}";"${hour}:00-${hour+1}:00";"${sumClicks}";"${sumImpressions}";"${sumIntClicks}";"${sumIntImpressions}"\n`;
-      }
+          csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}"\n`;
+        }
+      });
     });
     let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
     let link = document.createElement("a");
@@ -505,12 +556,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.removeChild(link);
   });
 
-  // Export agregovaného intervalového reportu do PDF
+  // Export do PDF – pro každý den a kategorii vypíše detailní řádky s časovým rozsahem a intervalovými hodnotami
   document.getElementById('exportIntervalPDF').addEventListener('click', function() {
-    let storedData = localStorage.getItem('sklikData');
-    let dataArr = storedData ? JSON.parse(storedData) : [];
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
+    let storedData = localStorage.getItem('sklikData');
+    let dataArr = storedData ? JSON.parse(storedData) : [];
     let dates;
     if(fromDate && toDate) {
       dates = getDatesInRange(fromDate, toDate);
@@ -531,32 +582,30 @@ document.addEventListener('DOMContentLoaded', function() {
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(8);
     let rowY = 10;
-    doc.text("Agregovaný intervalový report", 10, rowY);
+    doc.text("Intervalový report", 10, rowY);
     rowY += 8;
-    doc.text("Období: " + (fromDate || "od začátku") + " - " + (toDate || "do konce"), 10, rowY);
-    rowY += 8;
-    categories.forEach(cat => {
-      doc.text("Kategorie: " + categoryNames[cat], 10, rowY);
-      rowY += 8;
-      doc.text("Hodina | Prokliky | Zobrazení | Int. prokliky | Int. zobrazení", 10, rowY);
-      rowY += 8;
-      for(let hour = 6; hour < 24; hour++){
-        let sumClicks = 0, sumImpressions = 0, sumIntClicks = 0, sumIntImpressions = 0;
-        records.forEach(day => {
+    records.forEach(day => {
+      categories.forEach(cat => {
+        doc.text(`Datum: ${day.entryDate} (${day.dayOfWeek}) – Kategorie: ${categoryNames[cat]}`, 10, rowY);
+        rowY += 8;
+        doc.text("Hodina | Celkové prokliky | Celková zobrazení | Intervalové prokliky | Intervalová zobrazení", 10, rowY);
+        rowY += 8;
+        for(let hour = 6; hour < 24; hour++){
           let d = day.categories[cat][hour];
-          sumClicks += d.totalClicks;
-          sumImpressions += d.totalImpressions;
-          sumIntClicks += d.intervalClicks;
-          sumIntImpressions += d.intervalImpressions;
-        });
-        let line = `${hour}:00-${hour+1}:00 | ${sumClicks} | ${sumImpressions} | ${sumIntClicks} | ${sumIntImpressions}`;
-        doc.text(line, 10, rowY);
-        rowY += 6;
+          let line = `${hour}:00-${hour+1}:00 | ${d.totalClicks} | ${d.totalImpressions} | ${d.intervalClicks} | ${d.intervalImpressions}`;
+          doc.text(line, 10, rowY);
+          rowY += 6;
+          if(rowY > 280) {
+            doc.addPage();
+            rowY = 10;
+          }
+        }
+        rowY += 8;
         if(rowY > 280) {
           doc.addPage();
           rowY = 10;
         }
-      }
+      });
       rowY += 8;
       if(rowY > 280) {
         doc.addPage();
