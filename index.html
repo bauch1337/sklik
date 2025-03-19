@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sklik Statistiky</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h2>Záznam statistik Sklik</h2>
+    <label>Datum: <input type="date" id="date" onchange="updateDayAndLoadData()"></label>
+    <label>Den v týdnu: <input type="text" id="day" readonly></label>
+    <label>Budget (Kč): <input type="number" id="budget" value="333"></label>
+    
+    <h3>Celkové statistiky</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Časový interval</th>
+                <th>Aktivní</th>
+                <th>CPC (%)</th>
+                <th>Prokliky celkem</th>
+                <th>Zobrazení celkem</th>
+                <th>Prokliky za interval</th>
+                <th>Zobrazení za interval</th>
+            </tr>
+        </thead>
+        <tbody id="statsTotal"></tbody>
+    </table>
+
+    <h3>Statistiky dle umístění</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Časový interval</th>
+                <th>Aktivní</th>
+                <th>CPC (%)</th>
+                <th>Prokliky celkem</th>
+                <th>Zobrazení celkem</th>
+                <th>Prokliky za interval</th>
+                <th>Zobrazení za interval</th>
+            </tr>
+        </thead>
+        <tbody id="statsPlacement"></tbody>
+    </table>
+
+    <h3>Statistiky dle tématu</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Časový interval</th>
+                <th>Aktivní</th>
+                <th>CPC (%)</th>
+                <th>Prokliky celkem</th>
+                <th>Zobrazení celkem</th>
+                <th>Prokliky za interval</th>
+                <th>Zobrazení za interval</th>
+            </tr>
+        </thead>
+        <tbody id="statsTopic"></tbody>
+    </table>
+    
+    <button onclick="saveData()">Uložit data</button>
+    <button onclick="exportCSV()">Exportovat CSV</button>
+    <button onclick="exportPDF()">Exportovat PDF</button>
+    
+    <h3>Generovat report</h3>
+    <label>Od: <input type="date" id="reportStart"></label>
+    <label>Do: <input type="date" id="reportEnd"></label>
+    <button onclick="generateReport()">Uložit report</button>
+</body>
+</html>
+
