@@ -104,12 +104,16 @@
 document.addEventListener('DOMContentLoaded', function() {
 
   // ----- POMOCNÉ FUNKCE -----
-  // Vygeneruje HTML pro časové intervaly od 6:00 do 24:00 pro zadaný prefix.
-  // Pro kategorie "placement" a "topic" přidá i pole pro zadání ceny za proklik (CPC).
+  // Funkce generuje HTML pro časové intervaly (od 6:00 do 24:00)
+  // U kategorií "placement" a "topic" přidává navíc pole pro "Cena za proklik (Kč)"
   const generateTimeIntervalsHTML = (prefix) => {
     let html = '';
     for (let hour = 6; hour < 24; hour++) {
       let nextHour = hour + 1;
+      // U "placement" a "topic" nastavíme defaultní hodnotu CPC: 3 a 2.5 (s tečkou)
+      let defaultCPC = "";
+      if(prefix === 'placement') { defaultCPC = "3"; }
+      if(prefix === 'topic') { defaultCPC = "2.5"; }
       html += `
       <div class="time-interval">
         <h5>${hour}:00 - ${nextHour}:00</h5>
@@ -134,12 +138,11 @@ document.addEventListener('DOMContentLoaded', function() {
             <label>Procentuální změna (%)</label>
             <input type="number" class="form-control" id="${prefix}_percentage_${hour}" min="0" value="100">
           </div>`;
-      // Pokud jde o "placement" nebo "topic", přidáme pole pro CPC
-      if(prefix === 'placement' || prefix === 'topic') {
+      if(prefix === 'placement' || prefix === 'topic'){
         html += `
           <div class="col-md-2">
             <label>Cena za proklik (Kč)</label>
-            <input type="number" step="0.01" class="form-control" id="${prefix}_cpc_${hour}" value="0">
+            <input type="number" step="0.01" class="form-control" id="${prefix}_cpc_${hour}" value="${defaultCPC}">
           </div>`;
       }
       html += `
@@ -163,14 +166,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const getDefaultCategory = () => {
     let cat = {};
     for (let hour = 6; hour < 24; hour++) {
-      // Přidáme také vlastnost cpc pro placement a topic, ale pro overall zůstane prázdná
       cat[hour] = { totalClicks: 0, totalImpressions: 0, intervalClicks: 0, intervalImpressions: 0, percentage: 100, active: false };
-      // Pokud budeme volat tuto funkci pro placement nebo topic, dodatečně nastavíme cpc – to se při ukládání vyplní z formuláře.
     }
     return cat;
   };
 
-  // getDefaultRecord nyní uloží denní rozpočet, den a kategorie; pro placement a topic max CPC se již neukládá na úrovni kategorie
+  // U "placement" a "topic" neukládáme max CPC na úrovni kategorie – ta se zadává u každého intervalu
   const getDefaultRecord = (date) => {
     return {
       entryDate: date,
@@ -178,8 +179,8 @@ document.addEventListener('DOMContentLoaded', function() {
       dailyBudget: 0,
       categories: {
         overall: getDefaultCategory(),
-        placement: Object.assign(getDefaultCategory(), { }), // max CPC nebude na úrovni kategorie
-        topic: Object.assign(getDefaultCategory(), { })
+        placement: Object.assign(getDefaultCategory(), {}), 
+        topic: Object.assign(getDefaultCategory(), {})
       }
     };
   };
@@ -196,7 +197,6 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   // ----- NASTAVENÍ FORMULÁŘE A ULOŽENÍ DAT -----
-  // Vložíme HTML pro časové intervaly do sekcí
   document.getElementById('overallData').innerHTML = generateTimeIntervalsHTML('overall');
   document.getElementById('placementData').innerHTML = generateTimeIntervalsHTML('placement');
   document.getElementById('topicData').innerHTML = generateTimeIntervalsHTML('topic');
@@ -224,9 +224,8 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById(`${prefix}_interval_impressions_${hour}`).value = catData[hour].intervalImpressions;
             document.getElementById(`${prefix}_percentage_${hour}`).value = catData[hour].percentage;
             document.getElementById(`${prefix}_active_${hour}`).checked = catData[hour].active;
-            // Pokud jde o placement nebo topic, načteme i cenu za proklik
             if(prefix === 'placement' || prefix === 'topic'){
-              document.getElementById(`${prefix}_cpc_${hour}`).value = catData[hour].cpc || 0;
+              document.getElementById(`${prefix}_cpc_${hour}`).value = catData[hour].cpc || "";
             }
           }
         }
@@ -235,7 +234,6 @@ document.addEventListener('DOMContentLoaded', function() {
       loadCategoryData('placement', record.categories.placement);
       loadCategoryData('topic', record.categories.topic);
     } else {
-      // Pokud záznam neexistuje, resetujeme hodnoty
       const resetCategoryData = (prefix) => {
         for (let hour = 6; hour < 24; hour++) {
           document.getElementById(`${prefix}_clicks_${hour}`).value = 0;
@@ -245,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById(`${prefix}_percentage_${hour}`).value = 100;
           document.getElementById(`${prefix}_active_${hour}`).checked = true;
           if(prefix === 'placement' || prefix === 'topic'){
-            document.getElementById(`${prefix}_cpc_${hour}`).value = 0;
+            document.getElementById(`${prefix}_cpc_${hour}`).value = (prefix === 'placement' ? "3" : "2.5");
           }
         }
       };
@@ -299,7 +297,6 @@ document.addEventListener('DOMContentLoaded', function() {
         intervalImpressions: parseInt(document.getElementById(`placement_interval_impressions_${hour}`).value) || 0,
         percentage: parseFloat(document.getElementById(`placement_percentage_${hour}`).value) || 100,
         active: document.getElementById(`placement_active_${hour}`).checked,
-        // Použijeme replace, aby se případná čárka nahradila tečkou
         cpc: parseFloat(document.getElementById(`placement_cpc_${hour}`).value.replace(',', '.')) || 0
       };
     }
@@ -330,8 +327,7 @@ document.addEventListener('DOMContentLoaded', function() {
     alert('Data byla uložena.');
   });
 
-  // ----- GENEROVÁNÍ REPORTŮ -----
-  // Agregovaný denní report
+  // ----- GENEROVÁNÍ AGREGOVANÉHO (DENNÍHO) REPORTU -----
   document.getElementById('generateReport').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
@@ -379,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
       let placementClicks = 0, placementCost = 0;
       for (let hour = 6; hour < 24; hour++) {
         placementClicks += day.categories.placement[hour].totalClicks;
-        // Náklady se počítají jako intervalové prokliky * CPC (pro každý interval)
+        // Náklady se počítají jako intervalové prokliky * cena za proklik
         placementCost += day.categories.placement[hour].intervalClicks * day.categories.placement[hour].cpc;
       }
       let topicClicks = 0, topicCost = 0;
@@ -404,7 +400,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('reportResult').innerHTML = aggHTML;
   });
 
-  // Export agregovaného (denního) reportu do CSV
+  // ----- EXPORT AGREGOVANÉHO (DENNÍHO) REPORTU -----
   document.getElementById('exportDailyCSV').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
@@ -456,7 +452,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.removeChild(link);
   });
 
-  // Export agregovaného (denního) reportu do PDF
   document.getElementById('exportDailyPDF').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
@@ -519,7 +514,7 @@ document.addEventListener('DOMContentLoaded', function() {
     doc.save("sklik_monthly_report.pdf");
   });
 
-  // Export detailního intervalového reportu do CSV – přidány sloupce Rozpočet a Cena za proklik
+  // ----- EXPORT DETAILNÍHO INTERVALOVÉHO REPORTU -----
   document.getElementById('exportIntervalCSV').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
@@ -539,13 +534,13 @@ document.addEventListener('DOMContentLoaded', function() {
       return rec;
     });
     const categories = ['overall', 'placement', 'topic'];
-    // V hlavičce přidáváme také "Rozpočet (Kč)" a "Cena za proklik"
+    // Do hlavičky přidáváme také Rozpočet a Cena za proklik
     let csvContent = "\uFEFFDatum;Den;Rozpočet (Kč);Kategorie;Časový interval;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení;Procentuální změna;Aktivní;Cena za proklik (Kč)\n";
     records.forEach(day => {
       categories.forEach(cat => {
         for (let hour = 6; hour < 24; hour++) {
           let d = day.categories[cat][hour];
-          // Pro kategorii overall necháme cenu prázdnou
+          // U "overall" necháme cenu prázdnou, u placement a topic cenu načteme z pole
           let cpc = "";
           if (cat === "placement" || cat === "topic") {
             cpc = d.cpc;
@@ -563,7 +558,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.removeChild(link);
   });
 
-  // Export detailního intervalového reportu do PDF
   document.getElementById('exportIntervalPDF').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
@@ -595,8 +589,7 @@ document.addEventListener('DOMContentLoaded', function() {
       categories.forEach(cat => {
         let extra = "";
         if (cat === "placement" || cat === "topic") {
-          extra = " (Cena: " + day.categories[cat][6].cpc + " Kč)";
-          // Poznámka: U každého intervalu se může cena lišit, ale v hlavičce uvedeme cenu z prvního intervalu.
+          extra = " (Cena: " + day.categories[cat][6].cpc + " Kč)"; // zobrazí cenu z prvního intervalu
         }
         doc.text(`Datum: ${day.entryDate} (${day.dayOfWeek}), Rozpočet: ${day.dailyBudget} Kč – Kategorie: ${categoryNames[cat]}${extra}`, 10, rowY);
         rowY += 8;
