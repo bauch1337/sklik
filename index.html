@@ -1,74 +1,73 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sklik Statistiky</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sklik Metrika – Zadávání dat a reporty</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+ 
 </head>
 <body>
-    <h2>Záznam statistik Sklik</h2>
-    <label>Datum: <input type="date" id="date" onchange="updateDayAndLoadData()"></label>
-    <label>Den v týdnu: <input type="text" id="day" readonly></label>
-    <label>Budget (Kč): <input type="number" id="budget" value="333"></label>
+<div class="container">
+  <h1 class="mb-4">Sklik Metrika – Zadávání dat</h1>
+  
+  <!-- Formulář pro zadávání denních dat -->
+  <form id="dailyDataForm">
+    <div class="mb-3">
+      <label for="entryDate" class="form-label">Datum</label>
+      <input type="date" class="form-control" id="entryDate" required>
+    </div>
+    <div class="mb-3">
+      <label for="dayOfWeek" class="form-label">Den v týdnu</label>
+      <select class="form-select" id="dayOfWeek" required>
+        <option value="">Vyberte den</option>
+        <option value="Pondělí">Pondělí</option>
+        <option value="Úterý">Úterý</option>
+        <option value="Středa">Středa</option>
+        <option value="Čtvrtek">Čtvrtek</option>
+        <option value="Pátek">Pátek</option>
+        <option value="Sobota">Sobota</option>
+        <option value="Neděle">Neděle</option>
+      </select>
+    </div>
+    <div class="mb-3">
+      <label for="dailyBudget" class="form-label">Denní rozpočet (Kč)</label>
+      <input type="number" class="form-control" id="dailyBudget" value="333" required>
+    </div>
     
-    <h3>Celkové statistiky</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Časový interval</th>
-                <th>Aktivní</th>
-                <th>CPC (%)</th>
-                <th>Prokliky celkem</th>
-                <th>Zobrazení celkem</th>
-                <th>Prokliky za interval</th>
-                <th>Zobrazení za interval</th>
-            </tr>
-        </thead>
-        <tbody id="statsTotal"></tbody>
-    </table>
+    <!-- Sekce pro tři kategorie -->
+    <h3>Celkově</h3>
+    <div id="overallData"></div>
+    
+    <h3>Umístění (CPC Max)</h3>
+    <div id="placementData"></div>
+    
+    <h3>Téma (CPC Max)</h3>
+    <div id="topicData"></div>
+    
+    <button type="submit" class="btn btn-primary">Uložit data</button>
+  </form>
+  
+  <hr class="my-4">
+  
+  <!-- Reporty -->
+  <h2>Reporty</h2>
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <label for="reportFromDate" class="form-label">Od</label>
+      <input type="date" class="form-control" id="reportFromDate">
+    </div>
+    <div class="col-md-6">
+      <label for="reportToDate" class="form-label">Do</label>
+      <input type="date" class="form-control" id="reportToDate">
+    </div>
+  </div>
+  <button id="generateReport" class="btn btn-secondary mb-3">Generovat report</button>
+  <div id="reportResult"></div>
+  <button id="exportCSV" class="btn btn-success mt-2 me-2">Export do CSV</button>
+  <button id="exportPDF" class="btn btn-danger mt-2">Export do PDF</button>
+</div>
 
-    <h3>Statistiky dle umístění</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Časový interval</th>
-                <th>Aktivní</th>
-                <th>CPC (%)</th>
-                <th>Prokliky celkem</th>
-                <th>Zobrazení celkem</th>
-                <th>Prokliky za interval</th>
-                <th>Zobrazení za interval</th>
-            </tr>
-        </thead>
-        <tbody id="statsPlacement"></tbody>
-    </table>
 
-    <h3>Statistiky dle tématu</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Časový interval</th>
-                <th>Aktivní</th>
-                <th>CPC (%)</th>
-                <th>Prokliky celkem</th>
-                <th>Zobrazení celkem</th>
-                <th>Prokliky za interval</th>
-                <th>Zobrazení za interval</th>
-            </tr>
-        </thead>
-        <tbody id="statsTopic"></tbody>
-    </table>
-    
-    <button onclick="saveData()">Uložit data</button>
-    <button onclick="exportCSV()">Exportovat CSV</button>
-    <button onclick="exportPDF()">Exportovat PDF</button>
-    
-    <h3>Generovat report</h3>
-    <label>Od: <input type="date" id="reportStart"></label>
-    <label>Do: <input type="date" id="reportEnd"></label>
-    <button onclick="generateReport()">Uložit report</button>
 </body>
-</html>
-
