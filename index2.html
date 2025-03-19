@@ -50,14 +50,9 @@
     <!-- Kategorie UMÍSTĚNÍ -->
     <div class="mb-3">
       <h3 class="category-header" data-bs-toggle="collapse" data-bs-target="#placementCollapse">
-        Umístění (CPC Max) (kliknutím skrýt/ukázat)
+        Umístění (kliknutím skrýt/ukázat)
       </h3>
       <div id="placementCollapse" class="collapse show">
-        <!-- Vstup pro nastavení max CPC pro Umístění -->
-        <div class="mb-2">
-          <label for="placement_maxCPC" class="form-label">Max CPC (umístění)</label>
-          <input type="number" step="0.01" class="form-control" id="placement_maxCPC" value="3" required>
-        </div>
         <div id="placementData"></div>
       </div>
     </div>
@@ -65,14 +60,9 @@
     <!-- Kategorie TÉMA -->
     <div class="mb-3">
       <h3 class="category-header" data-bs-toggle="collapse" data-bs-target="#topicCollapse">
-        Téma (CPC Max) (kliknutím skrýt/ukázat)
+        Téma (kliknutím skrýt/ukázat)
       </h3>
       <div id="topicCollapse" class="collapse show">
-        <!-- Vstup pro nastavení max CPC pro Téma -->
-        <div class="mb-2">
-          <label for="topic_maxCPC" class="form-label">Max CPC (téma)</label>
-          <input type="number" step="0.01" class="form-control" id="topic_maxCPC" value="2.5" required>
-        </div>
         <div id="topicData"></div>
       </div>
     </div>
@@ -112,7 +102,10 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+
   // ----- POMOCNÉ FUNKCE -----
+  // Vygeneruje HTML pro časové intervaly od 6:00 do 24:00 pro zadaný prefix.
+  // Pro kategorie "placement" a "topic" přidá i pole pro zadání ceny za proklik (CPC).
   const generateTimeIntervalsHTML = (prefix) => {
     let html = '';
     for (let hour = 6; hour < 24; hour++) {
@@ -121,26 +114,35 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="time-interval">
         <h5>${hour}:00 - ${nextHour}:00</h5>
         <div class="row">
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label>Celkové prokliky</label>
             <input type="number" class="form-control" id="${prefix}_clicks_${hour}" min="0" value="0">
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label>Celková zobrazení</label>
             <input type="number" class="form-control" id="${prefix}_impressions_${hour}" min="0" value="0">
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label>Intervalové prokliky</label>
             <input type="number" class="form-control" id="${prefix}_interval_clicks_${hour}" min="0" value="0">
           </div>
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label>Intervalová zobrazení</label>
             <input type="number" class="form-control" id="${prefix}_interval_impressions_${hour}" min="0" value="0">
           </div>
-        </div>
-        <div class="mt-2">
-          <label>Procentuální změna (%)</label>
-          <input type="number" class="form-control" id="${prefix}_percentage_${hour}" min="0" value="100">
+          <div class="col-md-2">
+            <label>Procentuální změna (%)</label>
+            <input type="number" class="form-control" id="${prefix}_percentage_${hour}" min="0" value="100">
+          </div>`;
+      // Pokud jde o "placement" nebo "topic", přidáme pole pro CPC
+      if(prefix === 'placement' || prefix === 'topic') {
+        html += `
+          <div class="col-md-2">
+            <label>Cena za proklik (Kč)</label>
+            <input type="number" step="0.01" class="form-control" id="${prefix}_cpc_${hour}" value="0">
+          </div>`;
+      }
+      html += `
         </div>
         <div class="form-check mt-2">
           <input class="form-check-input" type="checkbox" id="${prefix}_active_${hour}" checked>
@@ -161,21 +163,23 @@ document.addEventListener('DOMContentLoaded', function() {
   const getDefaultCategory = () => {
     let cat = {};
     for (let hour = 6; hour < 24; hour++) {
+      // Přidáme také vlastnost cpc pro placement a topic, ale pro overall zůstane prázdná
       cat[hour] = { totalClicks: 0, totalImpressions: 0, intervalClicks: 0, intervalImpressions: 0, percentage: 100, active: false };
+      // Pokud budeme volat tuto funkci pro placement nebo topic, dodatečně nastavíme cpc – to se při ukládání vyplní z formuláře.
     }
     return cat;
   };
 
+  // getDefaultRecord nyní uloží denní rozpočet, den a kategorie; pro placement a topic max CPC se již neukládá na úrovni kategorie
   const getDefaultRecord = (date) => {
     return {
       entryDate: date,
       dayOfWeek: getCzechDayOfWeek(date),
       dailyBudget: 0,
-      // Uložíme také max CPC pro umístění a téma
       categories: {
         overall: getDefaultCategory(),
-        placement: Object.assign(getDefaultCategory(), { maxCPC: 0 }),
-        topic: Object.assign(getDefaultCategory(), { maxCPC: 0 })
+        placement: Object.assign(getDefaultCategory(), { }), // max CPC nebude na úrovni kategorie
+        topic: Object.assign(getDefaultCategory(), { })
       }
     };
   };
@@ -192,6 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   // ----- NASTAVENÍ FORMULÁŘE A ULOŽENÍ DAT -----
+  // Vložíme HTML pro časové intervaly do sekcí
   document.getElementById('overallData').innerHTML = generateTimeIntervalsHTML('overall');
   document.getElementById('placementData').innerHTML = generateTimeIntervalsHTML('placement');
   document.getElementById('topicData').innerHTML = generateTimeIntervalsHTML('topic');
@@ -210,12 +215,6 @@ document.addEventListener('DOMContentLoaded', function() {
     let record = dataArr.find(item => item.entryDate === dateVal);
     if (record) {
       document.getElementById('dailyBudget').value = record.dailyBudget;
-      if(record.categories.placement.maxCPC !== undefined) {
-        document.getElementById('placement_maxCPC').value = record.categories.placement.maxCPC;
-      }
-      if(record.categories.topic.maxCPC !== undefined) {
-        document.getElementById('topic_maxCPC').value = record.categories.topic.maxCPC;
-      }
       const loadCategoryData = (prefix, catData) => {
         for (let hour = 6; hour < 24; hour++) {
           if (catData[hour]) {
@@ -225,6 +224,10 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById(`${prefix}_interval_impressions_${hour}`).value = catData[hour].intervalImpressions;
             document.getElementById(`${prefix}_percentage_${hour}`).value = catData[hour].percentage;
             document.getElementById(`${prefix}_active_${hour}`).checked = catData[hour].active;
+            // Pokud jde o placement nebo topic, načteme i cenu za proklik
+            if(prefix === 'placement' || prefix === 'topic'){
+              document.getElementById(`${prefix}_cpc_${hour}`).value = catData[hour].cpc || 0;
+            }
           }
         }
       };
@@ -232,6 +235,7 @@ document.addEventListener('DOMContentLoaded', function() {
       loadCategoryData('placement', record.categories.placement);
       loadCategoryData('topic', record.categories.topic);
     } else {
+      // Pokud záznam neexistuje, resetujeme hodnoty
       const resetCategoryData = (prefix) => {
         for (let hour = 6; hour < 24; hour++) {
           document.getElementById(`${prefix}_clicks_${hour}`).value = 0;
@@ -240,6 +244,9 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById(`${prefix}_interval_impressions_${hour}`).value = 0;
           document.getElementById(`${prefix}_percentage_${hour}`).value = 100;
           document.getElementById(`${prefix}_active_${hour}`).checked = true;
+          if(prefix === 'placement' || prefix === 'topic'){
+            document.getElementById(`${prefix}_cpc_${hour}`).value = 0;
+          }
         }
       };
       resetCategoryData('overall');
@@ -270,7 +277,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     };
 
-    // Načteme data pro kategorii overall
+    // Uložíme data pro kategorii overall
     dayData.categories.overall = {};
     for (let hour = 6; hour < 24; hour++) {
       dayData.categories.overall[hour] = {
@@ -291,7 +298,9 @@ document.addEventListener('DOMContentLoaded', function() {
         intervalClicks: parseInt(document.getElementById(`placement_interval_clicks_${hour}`).value) || 0,
         intervalImpressions: parseInt(document.getElementById(`placement_interval_impressions_${hour}`).value) || 0,
         percentage: parseFloat(document.getElementById(`placement_percentage_${hour}`).value) || 100,
-        active: document.getElementById(`placement_active_${hour}`).checked
+        active: document.getElementById(`placement_active_${hour}`).checked,
+        // Použijeme replace, aby se případná čárka nahradila tečkou
+        cpc: parseFloat(document.getElementById(`placement_cpc_${hour}`).value.replace(',', '.')) || 0
       };
     }
     // Pro kategorii topic
@@ -303,12 +312,10 @@ document.addEventListener('DOMContentLoaded', function() {
         intervalClicks: parseInt(document.getElementById(`topic_interval_clicks_${hour}`).value) || 0,
         intervalImpressions: parseInt(document.getElementById(`topic_interval_impressions_${hour}`).value) || 0,
         percentage: parseFloat(document.getElementById(`topic_percentage_${hour}`).value) || 100,
-        active: document.getElementById(`topic_active_${hour}`).checked
+        active: document.getElementById(`topic_active_${hour}`).checked,
+        cpc: parseFloat(document.getElementById(`topic_cpc_${hour}`).value.replace(',', '.')) || 0
       };
     }
-    // Načteme max CPC hodnoty pro placement a topic
-    dayData.categories.placement.maxCPC = parseFloat(document.getElementById('placement_maxCPC').value) || 0;
-    dayData.categories.topic.maxCPC = parseFloat(document.getElementById('topic_maxCPC').value) || 0;
     
     let storedData = localStorage.getItem('sklikData');
     let dataArr = storedData ? JSON.parse(storedData) : [];
@@ -369,16 +376,17 @@ document.addEventListener('DOMContentLoaded', function() {
         overallClicks += day.categories.overall[hour].totalClicks;
         overallImpressions += day.categories.overall[hour].totalImpressions;
       }
-      let placementClicks = 0;
+      let placementClicks = 0, placementCost = 0;
       for (let hour = 6; hour < 24; hour++) {
         placementClicks += day.categories.placement[hour].totalClicks;
+        // Náklady se počítají jako intervalové prokliky * CPC (pro každý interval)
+        placementCost += day.categories.placement[hour].intervalClicks * day.categories.placement[hour].cpc;
       }
-      let topicClicks = 0;
+      let topicClicks = 0, topicCost = 0;
       for (let hour = 6; hour < 24; hour++) {
         topicClicks += day.categories.topic[hour].totalClicks;
+        topicCost += day.categories.topic[hour].intervalClicks * day.categories.topic[hour].cpc;
       }
-      let placementCost = (day.categories.placement.maxCPC * placementClicks).toFixed(2);
-      let topicCost = (day.categories.topic.maxCPC * topicClicks).toFixed(2);
       
       aggHTML += `<tr>
                     <td>${day.entryDate}</td>
@@ -387,58 +395,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td>${overallClicks}</td>
                     <td>${overallImpressions}</td>
                     <td>${placementClicks}</td>
-                    <td>${placementCost}</td>
+                    <td>${placementCost.toFixed(2)}</td>
                     <td>${topicClicks}</td>
-                    <td>${topicCost}</td>
+                    <td>${topicCost.toFixed(2)}</td>
                   </tr>`;
     });
     aggHTML += `</tbody></table>`;
-    
-    // Detailní intervalový report
-    let detailHTML = `<h4>Detailní intervalový report</h4>`;
-    records.forEach(day => {
-      detailHTML += `<h5>Den: ${day.entryDate} (${day.dayOfWeek}), Rozpočet: ${day.dailyBudget} Kč</h5>`;
-      const categories = ['overall', 'placement', 'topic'];
-      const categoryNames = { overall: 'Celkově', placement: 'Umístění', topic: 'Téma' };
-      categories.forEach(cat => {
-        let extra = "";
-        if (cat === "placement") { extra = " (Max CPC: " + day.categories.placement.maxCPC + ")"; }
-        if (cat === "topic") { extra = " (Max CPC: " + day.categories.topic.maxCPC + ")"; }
-        detailHTML += `<h6>${categoryNames[cat]}${extra}</h6>`;
-        detailHTML += `<table class="table table-bordered">
-                         <thead>
-                           <tr>
-                             <th>Časový interval</th>
-                             <th>Celkové prokliky</th>
-                             <th>Celková zobrazení</th>
-                             <th>Intervalové prokliky</th>
-                             <th>Intervalová zobrazení</th>
-                             <th>Procentuální změna (%)</th>
-                             <th>Aktivní</th>
-                           </tr>
-                         </thead>
-                         <tbody>`;
-        for (let hour = 6; hour < 24; hour++) {
-          let d = day.categories[cat][hour];
-          detailHTML += `<tr>
-                           <td>${hour}:00 – ${hour+1}:00</td>
-                           <td>${d.totalClicks}</td>
-                           <td>${d.totalImpressions}</td>
-                           <td>${d.intervalClicks}</td>
-                           <td>${d.intervalImpressions}</td>
-                           <td>${d.percentage}</td>
-                           <td>${d.active ? 'Ano' : 'Ne'}</td>
-                         </tr>`;
-        }
-        detailHTML += `</tbody></table>`;
-      });
-    });
-    
-    let fullReport = aggHTML + detailHTML;
-    document.getElementById('reportResult').innerHTML = fullReport;
+    document.getElementById('reportResult').innerHTML = aggHTML;
   });
 
-  // ----- EXPORTY REPORTŮ -----
   // Export agregovaného (denního) reportu do CSV
   document.getElementById('exportDailyCSV').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
@@ -467,18 +432,18 @@ document.addEventListener('DOMContentLoaded', function() {
         overallClicks += day.categories.overall[hour].totalClicks;
         overallImpressions += day.categories.overall[hour].totalImpressions;
       }
-      let placementClicks = 0;
+      let placementClicks = 0, placementCost = 0;
       for (let hour = 6; hour < 24; hour++) {
         placementClicks += day.categories.placement[hour].totalClicks;
+        placementCost += day.categories.placement[hour].intervalClicks * day.categories.placement[hour].cpc;
       }
-      let topicClicks = 0;
+      let topicClicks = 0, topicCost = 0;
       for (let hour = 6; hour < 24; hour++) {
         topicClicks += day.categories.topic[hour].totalClicks;
+        topicCost += day.categories.topic[hour].intervalClicks * day.categories.topic[hour].cpc;
       }
-      let placementCost = (day.categories.placement.maxCPC * placementClicks).toFixed(2);
-      let topicCost = (day.categories.topic.maxCPC * topicClicks).toFixed(2);
       
-      csvRows.push(`"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${overallClicks}";"${overallImpressions}";"${placementClicks}";"${placementCost}";"${topicClicks}";"${topicCost}"`);
+      csvRows.push(`"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${overallClicks}";"${overallImpressions}";"${placementClicks}";"${placementCost.toFixed(2)}";"${topicClicks}";"${topicCost.toFixed(2)}"`);
     });
     
     let csvContent = "\uFEFF" + csvRows.join("\n");
@@ -518,18 +483,18 @@ document.addEventListener('DOMContentLoaded', function() {
         overallClicks += day.categories.overall[hour].totalClicks;
         overallImpressions += day.categories.overall[hour].totalImpressions;
       }
-      let placementClicks = 0;
+      let placementClicks = 0, placementCost = 0;
       for (let hour = 6; hour < 24; hour++) {
         placementClicks += day.categories.placement[hour].totalClicks;
+        placementCost += day.categories.placement[hour].intervalClicks * day.categories.placement[hour].cpc;
       }
-      let topicClicks = 0;
+      let topicClicks = 0, topicCost = 0;
       for (let hour = 6; hour < 24; hour++) {
         topicClicks += day.categories.topic[hour].totalClicks;
+        topicCost += day.categories.topic[hour].intervalClicks * day.categories.topic[hour].cpc;
       }
-      let placementCost = (day.categories.placement.maxCPC * placementClicks).toFixed(2);
-      let topicCost = (day.categories.topic.maxCPC * topicClicks).toFixed(2);
       
-      rows.push(`${day.entryDate} | ${day.dayOfWeek} | ${day.dailyBudget} | ${overallClicks} | ${overallImpressions} | ${placementClicks} | ${placementCost} | ${topicClicks} | ${topicCost}`);
+      rows.push(`${day.entryDate} | ${day.dayOfWeek} | ${day.dailyBudget} | ${overallClicks} | ${overallImpressions} | ${placementClicks} | ${placementCost.toFixed(2)} | ${topicClicks} | ${topicCost.toFixed(2)}`);
     });
     
     const { jsPDF } = window.jspdf;
@@ -554,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function() {
     doc.save("sklik_monthly_report.pdf");
   });
 
-  // Export detailního intervalového reportu do CSV – nyní přidáváme i denní rozpočet a max CPC
+  // Export detailního intervalového reportu do CSV – přidány sloupce Rozpočet a Cena za proklik
   document.getElementById('exportIntervalCSV').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
@@ -574,17 +539,18 @@ document.addEventListener('DOMContentLoaded', function() {
       return rec;
     });
     const categories = ['overall', 'placement', 'topic'];
-    // Nová hlavička s přidanými sloupci: Rozpočet (Kč) a Max CPC
-    let csvContent = "\uFEFFDatum;Den;Rozpočet (Kč);Kategorie;Časový interval;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení;Procentuální změna;Aktivní;Max CPC\n";
+    // V hlavičce přidáváme také "Rozpočet (Kč)" a "Cena za proklik"
+    let csvContent = "\uFEFFDatum;Den;Rozpočet (Kč);Kategorie;Časový interval;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení;Procentuální změna;Aktivní;Cena za proklik (Kč)\n";
     records.forEach(day => {
       categories.forEach(cat => {
         for (let hour = 6; hour < 24; hour++) {
           let d = day.categories[cat][hour];
-          // Pro kategorii overall necháme sloupec Max CPC prázdný
-          let maxCPC = "";
-          if (cat === "placement") { maxCPC = day.categories.placement.maxCPC; }
-          if (cat === "topic") { maxCPC = day.categories.topic.maxCPC; }
-          csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}";"${d.percentage}";"${d.active ? 'Ano' : 'Ne'}";"${maxCPC}"\n`;
+          // Pro kategorii overall necháme cenu prázdnou
+          let cpc = "";
+          if (cat === "placement" || cat === "topic") {
+            cpc = d.cpc;
+          }
+          csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}";"${d.percentage}";"${d.active ? 'Ano' : 'Ne'}";"${cpc}"\n`;
         }
       });
     });
@@ -628,15 +594,17 @@ document.addEventListener('DOMContentLoaded', function() {
     records.forEach(day => {
       categories.forEach(cat => {
         let extra = "";
-        if (cat === "placement") { extra = " (Max CPC: " + day.categories.placement.maxCPC + ")"; }
-        if (cat === "topic") { extra = " (Max CPC: " + day.categories.topic.maxCPC + ")"; }
+        if (cat === "placement" || cat === "topic") {
+          extra = " (Cena: " + day.categories[cat][6].cpc + " Kč)";
+          // Poznámka: U každého intervalu se může cena lišit, ale v hlavičce uvedeme cenu z prvního intervalu.
+        }
         doc.text(`Datum: ${day.entryDate} (${day.dayOfWeek}), Rozpočet: ${day.dailyBudget} Kč – Kategorie: ${categoryNames[cat]}${extra}`, 10, rowY);
         rowY += 8;
-        doc.text("Časový interval | Celkové prokliky | Celková zobrazení | Intervalové prokliky | Intervalová zobrazení | Procentuální změna | Aktivní", 10, rowY);
+        doc.text("Časový interval | Celkové prokliky | Celková zobrazení | Intervalové prokliky | Intervalová zobrazení | Procentuální změna | Aktivní | Cena za proklik", 10, rowY);
         rowY += 8;
         for (let hour = 6; hour < 24; hour++) {
           let d = day.categories[cat][hour];
-          let line = `${hour}:00-${hour+1}:00 | ${d.totalClicks} | ${d.totalImpressions} | ${d.intervalClicks} | ${d.intervalImpressions} | ${d.percentage} | ${d.active ? 'Ano' : 'Ne'}`;
+          let line = `${hour}:00-${hour+1}:00 | ${d.totalClicks} | ${d.totalImpressions} | ${d.intervalClicks} | ${d.intervalImpressions} | ${d.percentage} | ${d.active ? 'Ano' : 'Ne'} | ${ (cat === "overall" ? "" : d.cpc) }`;
           doc.text(line, 10, rowY);
           rowY += 6;
           if (rowY > 280) {
@@ -658,6 +626,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     doc.save("sklik_interval_report.pdf");
   });
+
 });
 </script>
 </body>
