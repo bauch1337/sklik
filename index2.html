@@ -543,9 +543,10 @@ document.addEventListener('DOMContentLoaded', function() {
           // U "overall" necháme cenu prázdnou, u placement a topic cenu načteme z pole
           let cpc = "";
           if (cat === "placement" || cat === "topic") {
-            cpc = d.cpc;
+             cpc = (d.cpc !== undefined && d.cpc !== null && d.cpc !== "") ? '="' + d.cpc + '"' : "";
           }
           csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}";"${d.percentage}";"${d.active ? 'Ano' : 'Ne'}";"${cpc}"\n`;
+
         }
       });
     });
