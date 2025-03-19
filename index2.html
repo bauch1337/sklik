@@ -53,7 +53,7 @@
         Umístění (CPC Max) (kliknutím skrýt/ukázat)
       </h3>
       <div id="placementCollapse" class="collapse show">
-        <!-- Nastavení max CPC pro Umístění -->
+        <!-- Vstup pro nastavení max CPC pro Umístění -->
         <div class="mb-2">
           <label for="placement_maxCPC" class="form-label">Max CPC (umístění)</label>
           <input type="number" step="0.01" class="form-control" id="placement_maxCPC" value="3" required>
@@ -68,7 +68,7 @@
         Téma (CPC Max) (kliknutím skrýt/ukázat)
       </h3>
       <div id="topicCollapse" class="collapse show">
-        <!-- Nastavení max CPC pro Téma -->
+        <!-- Vstup pro nastavení max CPC pro Téma -->
         <div class="mb-2">
           <label for="topic_maxCPC" class="form-label">Max CPC (téma)</label>
           <input type="number" step="0.01" class="form-control" id="topic_maxCPC" value="2.5" required>
@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function() {
       entryDate: date,
       dayOfWeek: getCzechDayOfWeek(date),
       dailyBudget: 0,
-      // Uložíme také max CPC pro umístění a téma (výchozí 0)
+      // Uložíme také max CPC pro umístění a téma
       categories: {
         overall: getDefaultCategory(),
         placement: Object.assign(getDefaultCategory(), { maxCPC: 0 }),
@@ -306,7 +306,7 @@ document.addEventListener('DOMContentLoaded', function() {
         active: document.getElementById(`topic_active_${hour}`).checked
       };
     }
-    // Načteme hodnoty max CPC pro placement a topic
+    // Načteme max CPC hodnoty pro placement a topic
     dayData.categories.placement.maxCPC = parseFloat(document.getElementById('placement_maxCPC').value) || 0;
     dayData.categories.topic.maxCPC = parseFloat(document.getElementById('topic_maxCPC').value) || 0;
     
@@ -324,8 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // ----- GENEROVÁNÍ REPORTŮ -----
-  // Při generování zobrazíme jak agregovaný denní report, tak detailní intervalový report
-
+  // Agregovaný denní report
   document.getElementById('generateReport').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
@@ -347,7 +346,6 @@ document.addEventListener('DOMContentLoaded', function() {
       return rec;
     });
     
-    // Agregovaný denní report – souhrn z kategorie overall a zapsaný rozpočet a nastavené max CPC (ceny) u placement a topic
     let aggHTML = `<h4>Agregovaný denní report</h4>`;
     aggHTML += `<p><strong>Období:</strong> ${fromDate || "od začátku"} – ${toDate || "do konce"}</p>`;
     aggHTML += `<table class="table table-bordered">
@@ -396,7 +394,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     aggHTML += `</tbody></table>`;
     
-    // Detailní intervalový report – pro každý den a pro každou kategorii se zobrazí tabulka s časovými intervaly
+    // Detailní intervalový report
     let detailHTML = `<h4>Detailní intervalový report</h4>`;
     records.forEach(day => {
       detailHTML += `<h5>Den: ${day.entryDate} (${day.dayOfWeek}), Rozpočet: ${day.dailyBudget} Kč</h5>`;
@@ -436,7 +434,6 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
     
-    // Sloučíme oba reporty
     let fullReport = aggHTML + detailHTML;
     document.getElementById('reportResult').innerHTML = fullReport;
   });
@@ -557,7 +554,7 @@ document.addEventListener('DOMContentLoaded', function() {
     doc.save("sklik_monthly_report.pdf");
   });
 
-  // ----- EXPORT DETAILNÍHO INTERVALOVÉHO REPORTU -----
+  // Export detailního intervalového reportu do CSV – nyní přidáváme i denní rozpočet a max CPC
   document.getElementById('exportIntervalCSV').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
@@ -577,12 +574,17 @@ document.addEventListener('DOMContentLoaded', function() {
       return rec;
     });
     const categories = ['overall', 'placement', 'topic'];
-    let csvContent = "\uFEFFDatum;Den;Kategorie;Časový interval;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení;Procentuální změna;Aktivní\n";
+    // Nová hlavička s přidanými sloupci: Rozpočet (Kč) a Max CPC
+    let csvContent = "\uFEFFDatum;Den;Rozpočet (Kč);Kategorie;Časový interval;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení;Procentuální změna;Aktivní;Max CPC\n";
     records.forEach(day => {
       categories.forEach(cat => {
         for (let hour = 6; hour < 24; hour++) {
           let d = day.categories[cat][hour];
-          csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}";"${d.percentage}";"${d.active ? 'Ano' : 'Ne'}"\n`;
+          // Pro kategorii overall necháme sloupec Max CPC prázdný
+          let maxCPC = "";
+          if (cat === "placement") { maxCPC = day.categories.placement.maxCPC; }
+          if (cat === "topic") { maxCPC = day.categories.topic.maxCPC; }
+          csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}";"${d.percentage}";"${d.active ? 'Ano' : 'Ne'}";"${maxCPC}"\n`;
         }
       });
     });
@@ -595,6 +597,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.removeChild(link);
   });
 
+  // Export detailního intervalového reportu do PDF
   document.getElementById('exportIntervalPDF').addEventListener('click', function() {
     let fromDate = document.getElementById('reportFromDate').value;
     let toDate = document.getElementById('reportToDate').value;
@@ -627,7 +630,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let extra = "";
         if (cat === "placement") { extra = " (Max CPC: " + day.categories.placement.maxCPC + ")"; }
         if (cat === "topic") { extra = " (Max CPC: " + day.categories.topic.maxCPC + ")"; }
-        doc.text(`Datum: ${day.entryDate} (${day.dayOfWeek}) – Kategorie: ${categoryNames[cat]}${extra}`, 10, rowY);
+        doc.text(`Datum: ${day.entryDate} (${day.dayOfWeek}), Rozpočet: ${day.dailyBudget} Kč – Kategorie: ${categoryNames[cat]}${extra}`, 10, rowY);
         rowY += 8;
         doc.text("Časový interval | Celkové prokliky | Celková zobrazení | Intervalové prokliky | Intervalová zobrazení | Procentuální změna | Aktivní", 10, rowY);
         rowY += 8;
@@ -655,7 +658,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     doc.save("sklik_interval_report.pdf");
   });
-
 });
 </script>
 </body>
