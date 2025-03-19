@@ -432,7 +432,7 @@ document.addEventListener('DOMContentLoaded', function() {
         topicCost += day.categories.topic[hour].intervalClicks * day.categories.topic[hour].cpc;
       }
       
-      csvRows.push(`"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${overallClicks}";"${overallImpressions}";"${placementClicks}";"${placementCost.toFixed(2)}";"${topicClicks}";"${topicCost.toFixed(2)}"`);
+      csvRows.push(`${day.entryDate};${day.dayOfWeek};${day.dailyBudget};${overallClicks};${overallImpressions};${placementClicks};${placementCost.toFixed(2)};${topicClicks};${topicCost.toFixed(2)}`);
     });
     
     let csvContent = "\uFEFF" + csvRows.join("\n");
@@ -527,6 +527,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return rec;
     });
     const categories = ['overall', 'placement', 'topic'];
+    // Hlavička CSV, přidáváme i sloupce Rozpočet a Cena za proklik (Kč)
     let csvContent = "\uFEFFDatum;Den;Rozpočet (Kč);Kategorie;Časový interval;Celkové prokliky;Celková zobrazení;Intervalové prokliky;Intervalová zobrazení;Procentuální změna;Aktivní;Cena za proklik (Kč)\n";
     records.forEach(day => {
       categories.forEach(cat => {
@@ -534,10 +535,12 @@ document.addEventListener('DOMContentLoaded', function() {
           let d = day.categories[cat][hour];
           let cpc = "";
           if(cat === "placement" || cat === "topic"){
-            // Odstraníme případné uvozovky a zabalíme hodnotu do ="..."
-            cpc = (d.cpc !== undefined && d.cpc !== null && d.cpc !== "") ? '="' + d.cpc.toString().replace(/"/g, '') + '"' : "";
+            // Formátujeme hodnotu jako ="<hodnota>" bez nadbytečných uvozovek
+            if(d.cpc !== undefined && d.cpc !== null && d.cpc !== "") {
+              cpc = '="' + d.cpc + '"';
+            }
           }
-          csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}";"${d.percentage}";"${d.active ? 'Ano' : 'Ne'}";"${cpc}"\n`;
+          csvContent += `"${day.entryDate}";"${day.dayOfWeek}";"${day.dailyBudget}";"${cat}";"${hour}:00-${hour+1}:00";"${d.totalClicks}";"${d.totalImpressions}";"${d.intervalClicks}";"${d.intervalImpressions}";"${d.percentage}";"${d.active ? 'Ano' : 'Ne'}";` + cpc + `\n`;
         }
       });
     });
@@ -581,7 +584,7 @@ document.addEventListener('DOMContentLoaded', function() {
       categories.forEach(cat => {
         let extra = "";
         if (cat === "placement" || cat === "topic") {
-          extra = " (Cena: " + day.categories[cat][6].cpc + " Kč)"; // cena z prvního intervalu
+          extra = " (Cena: " + day.categories[cat][6].cpc + " Kč)";
         }
         doc.text(`Datum: ${day.entryDate} (${day.dayOfWeek}), Rozpočet: ${day.dailyBudget} Kč – Kategorie: ${categoryNames[cat]}${extra}`, 10, rowY);
         rowY += 8;
