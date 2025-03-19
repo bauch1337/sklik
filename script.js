@@ -1,52 +1,70 @@
-        let storageKey = 'sklikStats';
-        let savedData = JSON.parse(localStorage.getItem(storageKey)) || {};
 
-        function updateDayAndLoadData() {
-            const dateInput = document.getElementById('date').value;
-            if (dateInput) {
-                const date = new Date(dateInput);
-                const days = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
-                document.getElementById('day').value = days[date.getDay()];
-                loadData();
-            }
-        }
+// Po načtení stránky
+document.addEventListener('DOMContentLoaded', function() {
 
-        function generateTable(tableId) {
-            const table = document.getElementById(tableId);
-            table.innerHTML = '';
-            for (let i = 6; i < 24; i++) {
-                let row = `<tr data-hour="${i}">
-                    <td>${i}:00 - ${i+1}:00</td>
-                    <td><input type="checkbox" checked onchange="toggleRow(this)"></td>
-                    <td><input type="number" value="100"></td>
-                    <td><input type="number" value="0"></td>
-                    <td><input type="number" value="0"></td>
-                    <td><input type="number" value="0"></td>
-                    <td><input type="number" value="0"></td>
-                </tr>`;
-                table.innerHTML += row;
-            }
-        }
+  // Vygenerujeme časové intervaly od 6:00 do 24:00
+  const generateTimeIntervalsHTML = (prefix) => {
+    let html = '';
+    for(let hour = 6; hour < 24; hour++) {
+      let nextHour = hour + 1;
+      html += `
+      <div class="time-interval">
+        <h5>${hour}:00 - ${nextHour}:00</h5>
+        <div class="row">
+          <div class="col-md-3">
+            <label>Celkové prokliky</label>
+            <input type="number" class="form-control" id="${prefix}_clicks_${hour}" min="0" value="0">
+          </div>
+          <div class="col-md-3">
+            <label>Celková zobrazení</label>
+            <input type="number" class="form-control" id="${prefix}_impressions_${hour}" min="0" value="0">
+          </div>
+          <div class="col-md-3">
+            <label>Intervalové prokliky</label>
+            <input type="number" class="form-control" id="${prefix}_interval_clicks_${hour}" min="0" value="0">
+          </div>
+          <div class="col-md-3">
+            <label>Intervalová zobrazení</label>
+            <input type="number" class="form-control" id="${prefix}_interval_impressions_${hour}" min="0" value="0">
+          </div>
+        </div>
+        <div class="mt-2">
+          <label>Procentuální změna (%)</label>
+          <input type="number" class="form-control" id="${prefix}_percentage_${hour}" min="0" value="100">
+        </div>
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" id="${prefix}_active_${hour}" checked>
+          <label class="form-check-label" for="${prefix}_active_${hour}">Aktivní interval</label>
+        </div>
+      </div>
+      `;
+    }
+    return html;
+  };
 
-        function saveData() {
-            alert("Ukládání do LocalStorage");
-        }
+  // Naplníme sekce pro celkové statistiky, umístění a téma
+  document.getElementById('overallData').innerHTML = generateTimeIntervalsHTML('overall');
+  document.getElementById('placementData').innerHTML = generateTimeIntervalsHTML('placement');
+  document.getElementById('topicData').innerHTML = generateTimeIntervalsHTML('topic');
 
-        function exportCSV() {
-            alert("Export do CSV zde");
-        }
-
-        function exportPDF() {
-            const { jsPDF } = window.jspdf;
-            let doc = new jsPDF();
-            doc.text("Sklik Statistiky", 10, 10);
-            doc.save(`sklik_statistiky.pdf`);
-        }
-
-        function generateReport() {
-            alert("Generování reportu zde");
-        }
-
-        generateTable('statsTotal');
-        generateTable('statsPlacement');
-        generateTable('statsTopic');
+  // Zpracování formuláře – uložení dat do LocalStorage
+  document.getElementById('dailyDataForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Získání a validace základních údajů
+    let entryDate = document.getElementById('entryDate').value;
+    let dayOfWeek = document.getElementById('dayOfWeek').value;
+    let dailyBudget = document.getElementById('dailyBudget').value;
+    if (!entryDate || !dayOfWeek || !dailyBudget) {
+      alert('Vyplňte prosím všechny povinné údaje.');
+      return;
+    }
+    
+    // Objekt pro denní data
+    let dayData = {
+      entryDate,
+      dayOfWeek,
+      dailyBudget,
+      categories: {
+        overall: {},
+        placement: {},
